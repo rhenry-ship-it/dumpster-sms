@@ -172,6 +172,7 @@ app.post('/api/jobs', async (req, res) => {
       price: i === 0 ? (price || '') : '',
       notes: notes || '',
       tripLabel: tripsNeeded > 1 ? `Trip ${i + 1} of ${tripsNeeded}` : '',
+      completed: false,
       createdAt: new Date().toISOString(),
     };
 
@@ -203,6 +204,19 @@ app.post('/api/jobs', async (req, res) => {
 
   saveJobs(jobs);
   res.json({ trips });
+});
+
+app.patch('/api/jobs/:id', (req, res) => {
+  const jobs = loadJobs();
+  const job = jobs.find(j => j.id === req.params.id);
+  if (!job) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  if (typeof req.body.completed === 'boolean') {
+    job.completed = req.body.completed;
+  }
+  saveJobs(jobs);
+  res.json({ job });
 });
 
 app.delete('/api/jobs/:id', (req, res) => {
