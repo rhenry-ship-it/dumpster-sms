@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Job Log & Totals</title>
+<title>Driver — To-Do</title>
 <link rel="apple-touch-icon" href="logo.jpeg" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -241,14 +241,6 @@
     flex: 0 0 auto;
     padding: 8px 14px;
   }
-  .section-label {
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    color: #667680;
-    margin: 18px 0 8px;
-  }
   h2 { font-size: 16px; margin: 0 0 10px; color: var(--navy); }
 </style>
 </head>
@@ -256,133 +248,127 @@
 
 <div class="header">
   <img src="logo.jpeg" alt="Oak & Pallet Disposal Corporation" />
-  <p class="sub">JOB LOG — full history and running totals</p>
+  <p class="sub">DRIVER — today's pickups &amp; deliveries</p>
 </div>
 <div class="content">
 
 <div class="nav-tabs">
   <a href="index.html">New Job</a>
-  <a href="driver.html">Driver</a>
-  <a href="reports.html" class="active">All Jobs &amp; Totals</a>
+  <a href="driver.html" class="active">Driver</a>
+  <a href="reports.html">All Jobs &amp; Totals</a>
   <a href="archive.html">Archive</a>
 </div>
 
-<a href="/api/export.xlsx" class="submit-btn" style="display:block; text-align:center; text-decoration:none; margin-bottom:20px;">📊 Export to Excel</a>
-
-<div class="totals-grid" id="totalsGrid">
-  <div class="total-card"><div class="value">—</div><div class="label">Total Jobs</div></div>
-  <div class="total-card teal"><div class="value">—</div><div class="label">Total Revenue</div></div>
-  <div class="total-card"><div class="value">—</div><div class="label">Rentals</div></div>
-  <div class="total-card"><div class="value">—</div><div class="label">Deliveries</div></div>
-</div>
-
-<h2>Pending</h2>
-<div id="pendingList">Loading…</div>
-
-<div class="section-label">Completed</div>
-<div id="completedList"></div>
+<h2>To-Do</h2>
+<div id="todoList">Loading…</div>
 
 <script>
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-async function loadAll() {
-  const pendingEl = document.getElementById('pendingList');
-  const completedEl = document.getElementById('completedList');
-  const gridEl = document.getElementById('totalsGrid');
+async function loadTodo() {
+  const listEl = document.getElementById('todoList');
   try {
     const res = await fetch('/api/jobs');
     const jobs = await res.json();
+    const todo = jobs.filter(j => !j.completed);
 
-    // ---- totals ----
-    const totalJobs = jobs.length;
-    const totalRevenue = jobs.reduce((sum, j) => sum + (parseFloat(j.price) || 0), 0);
-    const rentals = jobs.filter(j => j.type !== 'delivery').length;
-    const deliveries = jobs.filter(j => j.type === 'delivery').length;
+    if (todo.length === 0) {
+      listEl.innerHTML = '<p style="color:#999">Nothing left to do. 🎉</p>';
+      return;
+    }
 
-    gridEl.innerHTML = `
-      <div class="total-card"><div class="value">${totalJobs}</div><div class="label">Total Jobs</div></div>
-      <div class="total-card teal"><div class="value">$${totalRevenue.toFixed(2)}</div><div class="label">Total Revenue</div></div>
-      <div class="total-card"><div class="value">${rentals}</div><div class="label">Rentals</div></div>
-      <div class="total-card"><div class="value">${deliveries}</div><div class="label">Deliveries</div></div>
+    listEl.innerHTML = todo.map(j => {
+      const isDelivery = j.type === 'delivery';
+      return `
+      <div class="job">
+        <div class="job-top">
+          <div class="job-title">${escapeHtml(j.customer)}</div>
+          <div class="job-badge">${isDelivery ? 'Delivery' : 'Pickup'}${j.tripLabel ? ' · ' + escapeHtml(j.tripLabel) : ''}</div>
+        </div>
+        <div class="job-meta">
+          ${escapeHtml(j.address)}<br/>
+          ${isDelivery
+            ? `${j.material ? escapeHtml(j.material) + ' · ' : ''}${j.yards ? j.yards + ' YD' : ''}`
+            : `${j.size ? escapeHtml(j.size) : ''}${j.dropDate ? ' · Dropped ' + j.dropDate : ''}`
+          }
+        </div>
+        ${isDelivery ? `
+          <div class="job-actions">
+            <button class="quick-complete-btn" data-id="${j.id}">Mark Delivered</button>
+          </div>
+        ` : `
+          <form class="pickup-form" data-id="${j.id}">
+            <div class="row">
+              <div>
+                <label>Weight (tons)</label>
+                <input type="number" step="0.01" name="pickupWeight" placeholder="e.g. 2.5" required />
+              </div>
+              <div>
+                <label>Dump Cost ($)</label>
+                <input type="number" step="0.01" name="dumpCost" placeholder="e.g. 180" required />
+              </div>
+            </div>
+            <button type="submit" class="submit-btn">Log Pickup &amp; Complete</button>
+          </form>
+        `}
+      </div>
     `;
+    }).join('');
 
-    const DAY_MS = 24 * 60 * 60 * 1000;
-    const now = Date.now();
-    const pending = jobs.filter(j => !j.completed);
-    const completed = jobs.filter(j => j.completed && (!j.completedAt || (now - new Date(j.completedAt).getTime()) <= DAY_MS));
+    document.querySelectorAll('.pickup-form').forEach(form => {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = form.dataset.id;
+        const fd = new FormData(form);
+        const body = Object.fromEntries(fd.entries());
+        body.actualPickupDate = new Date().toISOString().slice(0, 10);
+        body.completed = true;
 
-    pendingEl.innerHTML = pending.length
-      ? pending.map(renderJob).join('')
-      : '<p style="color:#999">Nothing pending.</p>';
+        const btn = form.querySelector('.submit-btn');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
 
-    completedEl.innerHTML = completed.length
-      ? completed.map(renderJob).join('')
-      : '<p style="color:#999">No completed jobs yet.</p>';
-
-    document.querySelectorAll('.complete-btn').forEach(btn => {
-      btn.addEventListener('click', () => toggleComplete(btn.dataset.id, btn.dataset.completed !== 'true'));
+        try {
+          await fetch(`/api/jobs/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          loadTodo();
+        } catch (e) {
+          alert('Could not save pickup.');
+          btn.disabled = false;
+          btn.textContent = 'Log Pickup & Complete';
+        }
+      });
     });
-    document.querySelectorAll('.delete-btn').forEach(btn => {
-      btn.addEventListener('click', () => deleteJob(btn.dataset.id));
+
+    document.querySelectorAll('.quick-complete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+          await fetch(`/api/jobs/${btn.dataset.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ completed: true })
+          });
+          loadTodo();
+        } catch (e) {
+          alert('Could not update job.');
+          btn.disabled = false;
+          btn.textContent = 'Mark Delivered';
+        }
+      });
     });
   } catch (e) {
-    pendingEl.innerHTML = '<p style="color:#c62828">Could not load jobs.</p>';
+    listEl.innerHTML = '<p style="color:#c62828">Could not load jobs.</p>';
   }
 }
 
-function renderJob(j) {
-  return `
-    <div class="job ${j.completed ? 'completed' : ''}">
-      <div class="job-top">
-        <div class="job-title">${escapeHtml(j.customer)}</div>
-        <div class="job-badge">${j.type === 'delivery' ? 'Delivery' : 'Rental'}${j.tripLabel ? ' · ' + escapeHtml(j.tripLabel) : ''}</div>
-      </div>
-      <div class="job-meta">
-        ${escapeHtml(j.address)}<br/>
-        ${j.type === 'delivery'
-          ? `${j.material ? escapeHtml(j.material) + ' · ' : ''}${j.yards ? j.yards + ' YD · ' : ''}`
-          : `${j.size ? escapeHtml(j.size) + ' · ' : ''}`
-        }${j.dropDate || ''}${j.pickupDate ? ' → ' + j.pickupDate : ''}${j.price ? ' · $' + j.price : ''}
-      </div>
-      <div class="job-sent ${j.textResult?.sent ? 'ok' : 'err'}">
-        ${j.textResult?.sent ? '✓ Texted crew' : '✗ Text not sent'}
-      </div>
-      <div class="job-actions">
-        <button class="complete-btn ${j.completed ? 'done' : ''}" data-id="${j.id}" data-completed="${!!j.completed}">
-          ${j.completed ? '✓ Completed' : 'Mark Complete'}
-        </button>
-        <button class="delete-btn" data-id="${j.id}">Delete</button>
-      </div>
-    </div>
-  `;
-}
-
-async function toggleComplete(id, completed) {
-  try {
-    await fetch(`/api/jobs/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ completed })
-    });
-    loadAll();
-  } catch (e) {
-    alert('Could not update job.');
-  }
-}
-
-async function deleteJob(id) {
-  if (!confirm('Delete this job? This cannot be undone.')) return;
-  try {
-    await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
-    loadAll();
-  } catch (e) {
-    alert('Could not delete job.');
-  }
-}
-
-loadAll();
+loadTodo();
 </script>
 
 </div>
