@@ -602,7 +602,8 @@ async function loadJobs(role = getRole()) {
   const listEl = document.getElementById('jobList');
   try {
     const res = await fetch('/api/jobs');
-    const jobs = await res.json();
+    const allJobs = await res.json();
+    const jobs = allJobs.filter(j => j.notes !== 'Imported from spreadsheet');
     if (jobs.length === 0) {
       listEl.innerHTML = '<p style="color:#999">No jobs logged yet.</p>';
       return;
