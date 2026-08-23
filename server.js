@@ -267,6 +267,21 @@ app.patch('/api/jobs/:id', (req, res) => {
   if (req.body.dropoffTime !== undefined) {
     job.dropoffTime = req.body.dropoffTime;
   }
+  if (req.body.dropoffActualDate !== undefined) {
+    job.dropoffActualDate = req.body.dropoffActualDate;
+  }
+  if (req.body.customer !== undefined) {
+    job.customer = req.body.customer;
+  }
+  if (req.body.address !== undefined) {
+    job.address = req.body.address;
+  }
+  if (req.body.size !== undefined) {
+    job.size = req.body.size;
+  }
+  if (req.body.price !== undefined) {
+    job.price = req.body.price;
+  }
   saveJobs(jobs);
   res.json({ job });
 });
