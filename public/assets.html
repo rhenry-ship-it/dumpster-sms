@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Driver — To-Do</title>
+<title>Asset Tracker</title>
 <link rel="apple-touch-icon" href="logo.jpeg" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -293,34 +293,58 @@
   }
   #authError { color: var(--err); font-size: 13px; font-weight: 600; margin-top: 10px; }
 </style>
+<style>
+  .aging-row {
+    background: white;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--teal);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .aging-row.warn { border-left-color: #e0a83d; }
+  .aging-row.alert { border-left-color: var(--err); }
+  .aging-top { display: flex; justify-content: space-between; align-items: center; }
+  .aging-id { font-weight: 800; color: var(--navy); font-size: 16px; }
+  .aging-days {
+    font-size: 13px;
+    font-weight: 800;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: var(--teal);
+    color: white;
+  }
+  .aging-row.warn .aging-days { background: #e0a83d; }
+  .aging-row.alert .aging-days { background: var(--err); }
+  .aging-meta { font-size: 13px; color: #55636c; margin-top: 6px; line-height: 1.5; }
+</style>
 </head>
 <body>
 
 <div class="header">
   <img src="logo.jpeg" alt="Oak & Pallet Disposal Corporation" />
-  <p class="sub">DRIVER — today's tasks</p>
+  <p class="sub">ASSET TRACKER — dumpsters currently on site</p>
 </div>
 <div class="content">
 
 <div class="nav-tabs">
   <a href="index.html">New Job</a>
-  <a href="driver.html" class="active">Driver</a>
+  <a href="driver.html">Driver</a>
   <a href="reports.html">All Jobs &amp; Totals</a>
   <a href="archive.html">Archive</a>
 </div>
 <div class="nav-tabs">
   <a href="stats.html">Statistics</a>
-  <a href="assets.html">Asset Tracker</a>
+  <a href="assets.html" class="active">Asset Tracker</a>
 </div>
 
-<div class="section-label">Drop-offs</div>
-<div id="dropoffList">Loading…</div>
+<div class="totals-grid" id="summaryGrid">
+  <div class="total-card"><div class="value">—</div><div class="label">Dumpsters Out</div></div>
+  <div class="total-card teal"><div class="value">—</div><div class="label">Avg Days On Site</div></div>
+</div>
 
-<div class="section-label">Pick-ups</div>
-<div id="pickupList"></div>
-
-<div class="section-label">Material Deliveries</div>
-<div id="deliveryList"></div>
+<h2>Currently On Site (oldest first)</h2>
+<div id="assetList">Loading…</div>
 
 <script src="auth.js"></script>
 <script>
@@ -328,185 +352,64 @@ function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-function nowTimeString() {
-  const d = new Date();
-  return d.toTimeString().slice(0, 5);
+function daysBetween(dateStr) {
+  const start = new Date(dateStr);
+  start.setHours(0, 0, 0, 0);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((now - start) / (1000 * 60 * 60 * 24)));
 }
 
-async function loadTasks() {
-  const dropoffEl = document.getElementById('dropoffList');
-  const pickupEl = document.getElementById('pickupList');
-  const deliveryEl = document.getElementById('deliveryList');
-
+async function loadAssets() {
+  const listEl = document.getElementById('assetList');
+  const gridEl = document.getElementById('summaryGrid');
   try {
     const res = await fetch('/api/jobs');
     const jobs = await res.json();
 
-    const dropoffs = jobs.filter(j => j.type !== 'delivery' && !j.dropoffCompleted && !j.completed);
-    const pickupsRaw = jobs.filter(j => j.type !== 'delivery' && j.dropoffCompleted && !j.completed);
-    const deliveries = jobs.filter(j => j.type === 'delivery' && !j.completed);
+    const onSite = jobs
+      .filter(j => j.type !== 'delivery' && j.dropoffCompleted && !j.completed)
+      .map(j => ({
+        ...j,
+        days: daysBetween(j.dropoffActualDate || j.dropDate || j.createdAt),
+      }))
+      .sort((a, b) => b.days - a.days);
 
-    // Pickups with a scheduled date rotate to the top (soonest first);
-    // ones with no set date stay below, in the order they were dropped off.
-    const withDate = pickupsRaw.filter(j => j.pickupDate).sort((a, b) => new Date(a.pickupDate) - new Date(b.pickupDate));
-    const withoutDate = pickupsRaw.filter(j => !j.pickupDate);
-    const pickups = [...withDate, ...withoutDate];
+    const avgDays = onSite.length
+      ? Math.round(onSite.reduce((s, j) => s + j.days, 0) / onSite.length)
+      : 0;
 
-    dropoffEl.innerHTML = dropoffs.length ? dropoffs.map(renderDropoff).join('') : '<p style="color:#999">No drop-offs pending.</p>';
-    pickupEl.innerHTML = pickups.length ? pickups.map(renderPickup).join('') : '<p style="color:#999">No pick-ups pending.</p>';
-    deliveryEl.innerHTML = deliveries.length ? deliveries.map(renderDelivery).join('') : '<p style="color:#999">No deliveries pending.</p>';
+    gridEl.innerHTML = `
+      <div class="total-card"><div class="value">${onSite.length}</div><div class="label">Dumpsters Out</div></div>
+      <div class="total-card teal"><div class="value">${avgDays}</div><div class="label">Avg Days On Site</div></div>
+    `;
 
-    document.querySelectorAll('.dropoff-form').forEach(form => {
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const id = form.dataset.id;
-        const fd = new FormData(form);
-        const body = Object.fromEntries(fd.entries());
-        body.dropoffCompleted = true;
+    if (onSite.length === 0) {
+      listEl.innerHTML = '<p style="color:#999">No dumpsters currently on site.</p>';
+      return;
+    }
 
-        const btn = form.querySelector('.submit-btn');
-        btn.disabled = true;
-        btn.textContent = 'Saving…';
-        try {
-          await fetch(`/api/jobs/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-          });
-          loadTasks();
-        } catch (e) {
-          alert('Could not save drop-off.');
-          btn.disabled = false;
-          btn.textContent = 'Log Drop-off';
-        }
-      });
-    });
-
-    document.querySelectorAll('.pickup-form').forEach(form => {
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const id = form.dataset.id;
-        const fd = new FormData(form);
-        const body = Object.fromEntries(fd.entries());
-        body.actualPickupDate = new Date().toISOString().slice(0, 10);
-        body.completed = true;
-
-        const btn = form.querySelector('.submit-btn');
-        btn.disabled = true;
-        btn.textContent = 'Saving…';
-        try {
-          await fetch(`/api/jobs/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-          });
-          loadTasks();
-        } catch (e) {
-          alert('Could not save pickup.');
-          btn.disabled = false;
-          btn.textContent = 'Log Pickup & Complete';
-        }
-      });
-    });
-
-    document.querySelectorAll('.quick-complete-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        btn.textContent = 'Saving…';
-        try {
-          await fetch(`/api/jobs/${btn.dataset.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ completed: true })
-          });
-          loadTasks();
-        } catch (e) {
-          alert('Could not update job.');
-          btn.disabled = false;
-          btn.textContent = 'Mark Delivered';
-        }
-      });
-    });
+    listEl.innerHTML = onSite.map(j => {
+      const cls = j.days >= 30 ? 'alert' : (j.days >= 14 ? 'warn' : '');
+      return `
+        <div class="aging-row ${cls}">
+          <div class="aging-top">
+            <div class="aging-id">${j.dumpsterId ? '#' + escapeHtml(j.dumpsterId) : 'No ID logged'}</div>
+            <div class="aging-days">${j.days} day${j.days === 1 ? '' : 's'}</div>
+          </div>
+          <div class="aging-meta">
+            ${escapeHtml(j.customer)} · ${escapeHtml(j.address)}<br/>
+            ${j.size ? escapeHtml(j.size) + ' · ' : ''}Dropped off: ${j.dropoffActualDate || j.dropDate || '—'}
+          </div>
+        </div>
+      `;
+    }).join('');
   } catch (e) {
-    dropoffEl.innerHTML = '<p style="color:#c62828">Could not load jobs.</p>';
+    listEl.innerHTML = '<p style="color:#c62828">Could not load assets.</p>';
   }
 }
 
-function renderDropoff(j) {
-  return `
-    <div class="job">
-      <div class="job-top">
-        <div class="job-title">${escapeHtml(j.customer)}</div>
-        <div class="job-badge">${escapeHtml(j.size || 'Rental')}</div>
-      </div>
-      <div class="job-meta">
-        ${escapeHtml(j.address)}<br/>
-        Scheduled drop-off: ${j.dropDate || '—'}
-      </div>
-      <form class="dropoff-form" data-id="${j.id}">
-        <div class="row">
-          <div>
-            <label>Time Dropped Off</label>
-            <input type="time" name="dropoffTime" value="${nowTimeString()}" required />
-          </div>
-          <div>
-            <label>Dumpster ID</label>
-            <input type="text" name="dumpsterId" placeholder="e.g. D-114" required />
-          </div>
-        </div>
-        <button type="submit" class="submit-btn">Log Drop-off</button>
-      </form>
-    </div>
-  `;
-}
-
-function renderPickup(j) {
-  return `
-    <div class="job">
-      <div class="job-top">
-        <div class="job-title">${escapeHtml(j.customer)}</div>
-        <div class="job-badge">${escapeHtml(j.size || 'Rental')}${j.dumpsterId ? ' · #' + escapeHtml(j.dumpsterId) : ''}</div>
-      </div>
-      <div class="job-meta">
-        ${escapeHtml(j.address)}<br/>
-        ${j.pickupDate ? 'Scheduled pickup: ' + j.pickupDate : 'No pickup date set yet'}
-      </div>
-      <form class="pickup-form" data-id="${j.id}">
-        <div class="row">
-          <div>
-            <label>Weight (tons)</label>
-            <input type="number" step="0.01" name="pickupWeight" placeholder="e.g. 2.5" required />
-          </div>
-          <div>
-            <label>Dump Cost ($)</label>
-            <input type="number" step="0.01" name="dumpCost" placeholder="e.g. 180" required />
-          </div>
-        </div>
-        <button type="submit" class="submit-btn">Log Pickup &amp; Complete</button>
-      </form>
-    </div>
-  `;
-}
-
-function renderDelivery(j) {
-  return `
-    <div class="job">
-      <div class="job-top">
-        <div class="job-title">${escapeHtml(j.customer)}</div>
-        <div class="job-badge">Delivery${j.tripLabel ? ' · ' + escapeHtml(j.tripLabel) : ''}</div>
-      </div>
-      <div class="job-meta">
-        ${escapeHtml(j.address)}<br/>
-        ${j.material ? escapeHtml(j.material) + ' · ' : ''}${j.yards ? j.yards + ' YD' : ''}
-      </div>
-      <div class="job-actions">
-        <button class="quick-complete-btn" data-id="${j.id}">Mark Delivered</button>
-      </div>
-    </div>
-  `;
-}
-
-requireAuth(loadTasks);
+requireAuth(loadAssets);
 </script>
 
 </div>
