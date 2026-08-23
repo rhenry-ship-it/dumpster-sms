@@ -3,15 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Asset Tracker</title>
+<title>Data</title>
 <link rel="apple-touch-icon" href="logo.jpeg" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Job Log" />
 <meta name="theme-color" content="#0d2b45" />
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
     --navy: #0d2b45;
@@ -235,6 +232,40 @@
     outline: none;
     border-color: var(--teal);
   }
+  .quick-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+  .quick-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 8px;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 3px 12px rgba(13,43,69,0.08);
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+  .quick-card:active { transform: scale(0.96); box-shadow: 0 1px 6px rgba(13,43,69,0.1); }
+  .quick-card.active-card {
+    border-color: var(--teal);
+    border-width: 2px;
+    background: #f4fafc;
+  }
+  .qc-icon { width: 52px; height: 52px; }
+  .qc-label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--navy);
+    text-align: center;
+    line-height: 1.3;
+  }
   .type-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
   .type-toggle button {
     flex: 1;
@@ -374,214 +405,226 @@
   }
   #authError { color: var(--err); font-size: 13px; font-weight: 600; margin-top: 10px; }
 </style>
-<style>
-  .aging-row {
-    background: white;
-    border: 1px solid var(--line);
-    border-left: 4px solid var(--teal);
-    border-radius: 10px;
-    padding: 14px;
-    margin-bottom: 10px;
-  }
-  .aging-row.warn { border-left-color: #e0a83d; }
-  .aging-row.alert { border-left-color: var(--err); }
-  .aging-top { display: flex; justify-content: space-between; align-items: center; }
-  .aging-id { font-weight: 800; color: var(--navy); font-size: 16px; }
-  .aging-days {
-    font-size: 13px;
-    font-weight: 800;
-    padding: 4px 12px;
-    border-radius: 20px;
-    background: var(--teal);
-    color: white;
-  }
-  .aging-row.warn .aging-days { background: #e0a83d; }
-  .aging-row.alert .aging-days { background: var(--err); }
-  .aging-meta { font-size: 13px; color: #55636c; margin-top: 6px; line-height: 1.5; }
-  .asset-item { margin-bottom: 10px; }
-  .asset-item .aging-row { margin-bottom: 0; width: 100%; text-align: left; cursor: pointer; font-family: inherit; }
-  .asset-item .aging-row.open { border-radius: 10px 10px 0 0; background: #f4fafc; }
-  .asset-edit-wrap {
-    background: #f4fafc;
-    border: 1px solid var(--line);
-    border-top: none;
-    border-radius: 0 0 10px 10px;
-    padding: 14px 16px;
-  }
-</style>
 </head>
 <body>
 
 <div class="header">
   <img src="logo.jpeg" alt="Oak & Pallet Disposal Corporation" />
-  <p class="sub">ASSET TRACKER — dumpsters currently on site</p>
+  <p class="sub">DATA — upload spreadsheets, download reports</p>
 </div>
 <div class="content">
 
-<div class="totals-grid" id="summaryGrid">
-  <div class="total-card"><div class="value">—</div><div class="label">Dumpsters Out</div></div>
-  <div class="total-card teal"><div class="value">—</div><div class="label">Avg Days On Site</div></div>
+<div id="adminOnlyNote" style="display:none;">
+  <p style="text-align:center; color:#999; margin-top:40px;">This page is for administrators only.</p>
 </div>
 
-<div id="importSection" style="display:none;">
-  <p style="font-size:13px; color:#667680;">
-    Upload spreadsheets and manage imports from the <a href="data.html" style="color:var(--teal-dark); font-weight:700;">Data</a> page.
+<div id="dataContent" style="display:none;">
+
+  <div class="section-label">Upload — Active Dumpsters</div>
+  <p style="font-size:13px; color:#667680; margin-top:-6px;">
+    For your current tracking sheet — dumpsters still out on site. Skips anything already picked up.
+    Re-uploading updates matching entries instead of duplicating them.
   </p>
+  <input type="file" id="activeFile" accept=".xlsx,.xls" />
+  <div id="activeStatus" style="margin-top:8px; margin-bottom:20px; font-size:13px; font-weight:600;"></div>
+
+  <div class="section-label">Upload — Full Job History</div>
+  <p style="font-size:13px; color:#667680; margin-top:-6px;">
+    For your complete billing/tracking sheet — every row, completed and paid included, so revenue,
+    dump cost, and profit stats reflect true history.
+  </p>
+  <input type="file" id="historyFile" accept=".xlsx,.xls" />
+  <div id="historyStatus" style="margin-top:8px; margin-bottom:20px; font-size:13px; font-weight:600;"></div>
+
+  <button id="clearImportsBtn" type="button" style="width:100%; margin-bottom:24px; padding:12px; border-radius:11px; border:1.5px solid var(--err); background:white; color:var(--err); font-weight:700; font-family:inherit; cursor:pointer;">Clear All Imported Data</button>
+
+  <div class="section-label">Download Reports</div>
+  <a href="/api/export.xlsx" class="submit-btn" style="display:block; text-align:center; text-decoration:none; margin-bottom:10px;">📋 Full Job Log (Excel)</a>
+  <a href="/api/export-financial.xlsx" class="submit-btn" style="display:block; text-align:center; text-decoration:none; background:var(--navy);">💰 Full Financial Report (Excel)</a>
+  <p style="font-size:12px; color:#667680; margin-top:8px;">
+    The financial report includes a summary (revenue, dump fees, gross profit, ballpark expenses, net profit)
+    plus a month-by-month breakdown for the current year.
+  </p>
+
 </div>
 
-<h2>Currently On Site (oldest first)</h2>
-<div id="assetList">Loading…</div>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="auth.js"></script>
 <script>
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-function daysBetween(dateStr) {
-  const start = new Date(dateStr);
-  start.setHours(0, 0, 0, 0);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.round((now - start) / (1000 * 60 * 60 * 24)));
+function inferSizeFromId(id) {
+  const digits = (id || '').replace(/\D/g, '');
+  if (digits.startsWith('15')) return '15 YD';
+  if (digits.startsWith('10')) return '10 YD';
+  return '';
 }
 
-async function loadAssets(role = getRole()) {
-  const isAdmin = role === 'admin';
-  const listEl = document.getElementById('assetList');
-  const gridEl = document.getElementById('summaryGrid');
+function toIsoDate(val) {
+  if (!val) return '';
+  let d = val instanceof Date ? val : new Date(val);
+  if (isNaN(d.getTime())) return String(val).trim();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function cleanMoney(val) {
+  if (val === null || val === undefined || val === '') return '';
+  const cleaned = String(val).replace(/[^0-9.-]/g, '');
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? '' : String(n);
+}
+
+function normalizeImportRow(row) {
+  const get = (aliases) => {
+    for (const key of Object.keys(row)) {
+      const k = key.toLowerCase().trim();
+      if (aliases.some(a => k.includes(a))) return row[key];
+    }
+    return '';
+  };
+
+  const dumpsterId = String(get(['dumpster id', 'dumpster', 'can#', 'can', 'asset id', 'unit id', 'id']) || '').trim();
+  let size = String(get(['size', 'yard', 'yd']) || '').trim();
+  if (!size) size = inferSizeFromId(dumpsterId);
+
+  let price = cleanMoney(get(['price', 'rate', 'amount']));
+  if (!price && size.includes('15')) price = '425';
+  if (!price && size.includes('10')) price = '375';
+
+  return {
+    dumpsterId,
+    customer: String(get(['customer', 'client', 'name']) || '').trim(),
+    address: String(get(['address', 'location', 'site']) || '').trim(),
+    size,
+    price,
+    weight: cleanMoney(get(['weight', 'tons', 'tonnage'])),
+    dumpCost: cleanMoney(get(['trash cost', 'dump cost', 'tip fee', 'tipping fee', 'disposal cost', 'dump fee', 'tipping'])),
+    dropoffActualDate: toIsoDate(get(['drop off date', 'dropoff date', 'dropped off', 'drop off', 'date dropped', 'date', 'start date'])),
+    pickedUp: toIsoDate(get(['picked up', 'pickup date', 'date picked up', 'pickup'])),
+  };
+}
+
+async function parseWorkbook(file) {
+  const data = await file.arrayBuffer();
+  const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  let headerRowIndex = raw.findIndex(r =>
+    r.filter(c => c !== '' && c !== null && c !== undefined).length >= 2
+  );
+  if (headerRowIndex === -1) headerRowIndex = 0;
+  const headers = raw[headerRowIndex].map(h => String(h || '').trim());
+  const headerLower = headers.map(h => h.toLowerCase().trim());
+  return raw.slice(headerRowIndex + 1)
+    .filter(r => r.some(c => c !== '' && c !== null && c !== undefined))
+    .filter(r => {
+      const rowLower = r.map(c => String(c || '').toLowerCase().trim());
+      const matchCount = headerLower.filter((h, i) => h && rowLower[i] === h).length;
+      return matchCount < 3;
+    })
+    .map(r => {
+      const obj = {};
+      headers.forEach((h, i) => { obj[h || `col${i}`] = r[i]; });
+      return obj;
+    });
+}
+
+document.getElementById('activeFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('activeStatus');
+  statusEl.style.color = 'var(--ink)';
+  statusEl.textContent = 'Reading file…';
+
   try {
-    const res = await fetch('/api/jobs');
-    const jobs = await res.json();
+    const rows = await parseWorkbook(file);
+    const parsed = rows.map(normalizeImportRow);
+    const skippedPickedUp = parsed.filter(a => a.address && a.dumpsterId && a.pickedUp).length;
+    const assets = parsed.filter(a => a.address && a.dumpsterId && !a.pickedUp);
 
-    const onSite = jobs
-      .filter(j => j.type !== 'delivery' && j.dropoffCompleted && !j.completed)
-      .map(j => ({
-        ...j,
-        days: daysBetween(j.dropoffActualDate || j.dropDate || j.createdAt),
-      }))
-      .sort((a, b) => b.days - a.days);
-
-    const avgDays = onSite.length
-      ? Math.round(onSite.reduce((s, j) => s + j.days, 0) / onSite.length)
-      : 0;
-
-    gridEl.innerHTML = `
-      <div class="total-card"><div class="value">${onSite.length}</div><div class="label">Dumpsters Out</div></div>
-      <div class="total-card teal"><div class="value">${avgDays}</div><div class="label">Avg Days On Site</div></div>
-    `;
-
-    if (onSite.length === 0) {
-      listEl.innerHTML = '<p style="color:#999">No dumpsters currently on site.</p>';
+    if (assets.length === 0) {
+      statusEl.style.color = 'var(--err)';
+      statusEl.textContent = skippedPickedUp > 0
+        ? `All ${skippedPickedUp} matching row(s) already show a pickup date — nothing currently active to import.`
+        : 'No usable rows found — check for Dumpster ID and Address columns.';
+      e.target.value = '';
       return;
     }
 
-    listEl.innerHTML = onSite.map(j => renderAssetRow(j, isAdmin)).join('');
+    statusEl.textContent = `Importing ${assets.length} active asset(s)${skippedPickedUp > 0 ? ` (skipped ${skippedPickedUp} already picked up)` : ''}…`;
+    const res = await fetch('/api/import-assets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assets }),
+    });
+    const result = await res.json();
+    statusEl.style.color = 'var(--ok)';
+    statusEl.textContent = `✅ ${result.created} new, ${result.updated} updated.`;
+  } catch (err) {
+    statusEl.style.color = 'var(--err)';
+    statusEl.textContent = 'Could not read that file — make sure it is a valid .xlsx.';
+  }
+  e.target.value = '';
+});
 
-    if (isAdmin) {
-      document.querySelectorAll('.aging-row[data-target]').forEach(rowBtn => {
-        rowBtn.addEventListener('click', () => {
-          const wrap = document.getElementById(rowBtn.dataset.target);
-          if (!wrap) return;
-          const isOpen = wrap.style.display === 'block';
-          wrap.style.display = isOpen ? 'none' : 'block';
-          rowBtn.classList.toggle('open', !isOpen);
-        });
-      });
+document.getElementById('historyFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('historyStatus');
+  statusEl.style.color = 'var(--ink)';
+  statusEl.textContent = 'Reading file…';
 
-      document.querySelectorAll('.asset-edit-form').forEach(form => {
-        form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const id = form.dataset.id;
-          const fd = new FormData(form);
-          const body = Object.fromEntries(fd.entries());
-          const btn = form.querySelector('button[type="submit"]');
-          btn.disabled = true;
-          btn.textContent = 'Saving…';
-          try {
-            await fetch(`/api/jobs/${id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body),
-            });
-            loadAssets();
-          } catch (err) {
-            alert('Could not save changes.');
-            btn.disabled = false;
-            btn.textContent = 'Save Changes';
-          }
-        });
-      });
+  try {
+    const rows = await parseWorkbook(file);
+    const assets = rows.map(normalizeImportRow).filter(a => a.address);
+
+    if (assets.length === 0) {
+      statusEl.style.color = 'var(--err)';
+      statusEl.textContent = 'No usable rows found — check for an Address column.';
+      e.target.value = '';
+      return;
     }
+
+    const completedCount = assets.filter(a => a.pickedUp).length;
+    statusEl.textContent = `Importing ${assets.length} row(s) (${completedCount} already picked up)…`;
+
+    const res = await fetch('/api/import-assets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assets, mode: 'history' }),
+    });
+    const result = await res.json();
+    statusEl.style.color = 'var(--ok)';
+    statusEl.textContent = `✅ ${result.created} new, ${result.updated} updated${result.skipped ? `, ${result.skipped} skipped (bad data)` : ''}.`;
+  } catch (err) {
+    statusEl.style.color = 'var(--err)';
+    statusEl.textContent = 'Could not read that file — make sure it is a valid .xlsx.';
+  }
+  e.target.value = '';
+});
+
+document.getElementById('clearImportsBtn').addEventListener('click', async () => {
+  if (!confirm('Remove every asset that came from a spreadsheet import? Manually-created jobs are not affected.')) return;
+  try {
+    const res = await fetch('/api/import-assets', { method: 'DELETE' });
+    const result = await res.json();
+    alert(`Removed ${result.removed} imported record(s).`);
   } catch (e) {
-    listEl.innerHTML = '<p style="color:#c62828">Could not load assets.</p>';
+    alert('Could not clear imported data.');
   }
-}
-
-function renderAssetRow(j, isAdmin) {
-  const cls = j.days >= 30 ? 'alert' : (j.days >= 14 ? 'warn' : '');
-  const rowInner = `
-    <div class="aging-top">
-      <div class="aging-id">${j.dumpsterId ? '#' + escapeHtml(j.dumpsterId) : 'No ID logged'}</div>
-      <div class="aging-days">${j.days} day${j.days === 1 ? '' : 's'}</div>
-    </div>
-    <div class="aging-meta">
-      ${escapeHtml(j.customer)} · ${escapeHtml(j.address)}<br/>
-      ${j.size ? escapeHtml(j.size) + ' · ' : ''}Dropped off: ${j.dropoffActualDate || j.dropDate || '—'}
-    </div>
-  `;
-
-  if (!isAdmin) {
-    return `<div class="aging-row ${cls}">${rowInner}</div>`;
-  }
-
-  return `
-    <div class="asset-item">
-      <button type="button" class="aging-row ${cls}" data-target="asset-edit-${j.id}">${rowInner}</button>
-      <div class="asset-edit-wrap" id="asset-edit-${j.id}" style="display:none;">
-        <form class="asset-edit-form" data-id="${j.id}">
-          <div class="row">
-            <div>
-              <label>Customer</label>
-              <input name="customer" value="${escapeHtml(j.customer)}" />
-            </div>
-            <div>
-              <label>Dumpster ID</label>
-              <input name="dumpsterId" value="${escapeHtml(j.dumpsterId || '')}" />
-            </div>
-          </div>
-          <div class="row">
-            <div>
-              <label>Address</label>
-              <input name="address" value="${escapeHtml(j.address)}" />
-            </div>
-            <div>
-              <label>Size</label>
-              <input name="size" value="${escapeHtml(j.size || '')}" />
-            </div>
-          </div>
-          <div class="row">
-            <div>
-              <label>Drop-off Date</label>
-              <input type="date" name="dropoffActualDate" value="${j.dropoffActualDate || ''}" />
-            </div>
-            <div>
-              <label>Price ($)</label>
-              <input type="number" step="0.01" name="price" value="${escapeHtml(j.price || '')}" />
-            </div>
-          </div>
-          <button type="submit" class="submit-btn">Save Changes</button>
-        </form>
-      </div>
-    </div>
-  `;
-}
+});
 
 requireAuth(function (role) {
   if (role === 'admin') {
-    document.getElementById('importSection').style.display = 'block';
+    document.getElementById('dataContent').style.display = 'block';
+  } else {
+    document.getElementById('adminOnlyNote').style.display = 'block';
   }
-  loadAssets();
 });
 </script>
 

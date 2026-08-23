@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { href: 'archive.html', label: 'Archive' },
   { href: 'stats.html', label: 'Statistics' },
   { href: 'assets.html', label: 'Assets' },
+  { href: 'data.html', label: 'Data' },
 ];
 
 function injectTopBar() {

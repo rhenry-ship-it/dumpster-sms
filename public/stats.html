@@ -415,20 +415,11 @@
 <div class="totals-grid" id="yearGrid"></div>
 
 <div id="historyImportSection" style="display:none;">
-  <div class="section-label">Import Full Job History (Year-to-Date)</div>
-  <form id="historyImportForm">
-    <label>Upload your full billing/tracking spreadsheet (.xlsx)</label>
-    <input type="file" id="historyImportFile" accept=".xlsx,.xls" />
-    <p style="font-size:12px; color:#667680; margin-top:8px;">
-      Imports every row — completed and paid included — so these stats reflect your true history.
-      Recognizes columns like Dumpster ID/Can#, Customer, Address/Location, Weight, Price,
-      Drop-off Date, and Picked Up date. Safe to re-upload; matching rows update instead of duplicating.
-    </p>
-    <div id="historyImportStatus" style="margin-top:8px; font-size:13px; font-weight:600;"></div>
-  </form>
+  <p style="font-size:13px; color:#667680;">
+    Upload spreadsheets and manage imports from the <a href="data.html" style="color:var(--teal-dark); font-weight:700;">Data</a> page.
+  </p>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="auth.js"></script>
 <script>
 function startOfWeek(d) {
@@ -446,124 +437,6 @@ function yearToDateMultiplier(now) {
   const end = new Date(now.getFullYear() + 1, 0, 1);
   const fraction = (now - start) / (end - start);
   return fraction * 12; // scales a monthly ballpark figure to however much of the year has elapsed
-}
-
-function setupHistoryImport() {
-  const fileInput = document.getElementById('historyImportFile');
-  const statusEl = document.getElementById('historyImportStatus');
-
-  fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    statusEl.style.color = 'var(--ink)';
-    statusEl.textContent = 'Reading file…';
-
-    try {
-      const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-      let headerRowIndex = raw.findIndex(r =>
-        r.filter(c => c !== '' && c !== null && c !== undefined).length >= 2
-      );
-      if (headerRowIndex === -1) headerRowIndex = 0;
-      const headers = raw[headerRowIndex].map(h => String(h || '').trim());
-      const headerLower = headers.map(h => h.toLowerCase().trim());
-      const rows = raw.slice(headerRowIndex + 1)
-        .filter(r => r.some(c => c !== '' && c !== null && c !== undefined))
-        .filter(r => {
-          // Skip rows that are actually a repeated header line pasted mid-sheet
-          const rowLower = r.map(c => String(c || '').toLowerCase().trim());
-          const matchCount = headerLower.filter((h, i) => h && rowLower[i] === h).length;
-          return matchCount < 3;
-        })
-        .map(r => {
-          const obj = {};
-          headers.forEach((h, i) => { obj[h || `col${i}`] = r[i]; });
-          return obj;
-        });
-
-      const assets = rows.map(normalizeHistoryRow).filter(a => a.address);
-
-      if (assets.length === 0) {
-        statusEl.style.color = 'var(--err)';
-        statusEl.textContent = 'No usable rows found — check for Dumpster ID and Address columns.';
-        fileInput.value = '';
-        return;
-      }
-
-      const completedCount = assets.filter(a => a.pickedUp).length;
-      statusEl.textContent = `Importing ${assets.length} row(s) (${completedCount} already picked up)…`;
-
-      const res = await fetch('/api/import-assets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assets, mode: 'history' }),
-      });
-      const result = await res.json();
-      statusEl.style.color = 'var(--ok)';
-      statusEl.textContent = `✅ ${result.created} new, ${result.updated} updated${result.skipped ? `, ${result.skipped} skipped (bad data)` : ''}.`;
-      loadStats();
-    } catch (err) {
-      statusEl.style.color = 'var(--err)';
-      statusEl.textContent = 'Could not read that file — make sure it is a valid .xlsx.';
-    }
-    fileInput.value = '';
-  });
-}
-
-function inferSizeFromId(id) {
-  const digits = (id || '').replace(/\D/g, '');
-  if (digits.startsWith('15')) return '15 YD';
-  if (digits.startsWith('10')) return '10 YD';
-  return '';
-}
-
-function toIsoDate(val) {
-  if (!val) return '';
-  let d = val instanceof Date ? val : new Date(val);
-  if (isNaN(d.getTime())) return String(val).trim();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function normalizeHistoryRow(row) {
-  const get = (aliases) => {
-    for (const key of Object.keys(row)) {
-      const k = key.toLowerCase().trim();
-      if (aliases.some(a => k.includes(a))) return row[key];
-    }
-    return '';
-  };
-
-  function cleanMoney(val) {
-    if (val === null || val === undefined || val === '') return '';
-    const cleaned = String(val).replace(/[^0-9.-]/g, '');
-    const n = parseFloat(cleaned);
-    return isNaN(n) ? '' : String(n);
-  }
-
-  const dumpsterId = String(get(['dumpster id', 'dumpster', 'can#', 'can', 'asset id', 'unit id', 'id']) || '').trim();
-  let size = String(get(['size', 'yard', 'yd']) || '').trim();
-  if (!size) size = inferSizeFromId(dumpsterId);
-
-  let price = cleanMoney(get(['price', 'rate', 'amount']));
-  if (!price && size.includes('15')) price = '425';
-  if (!price && size.includes('10')) price = '375';
-
-  return {
-    dumpsterId,
-    customer: String(get(['customer', 'client', 'name']) || '').trim(),
-    address: String(get(['address', 'location', 'site']) || '').trim(),
-    size,
-    price,
-    weight: cleanMoney(get(['weight', 'tons', 'tonnage'])),
-    dumpCost: cleanMoney(get(['trash cost', 'dump cost', 'tip fee', 'tipping fee', 'disposal cost', 'dump fee', 'tipping'])),
-    dropoffActualDate: toIsoDate(get(['drop off date', 'dropoff date', 'dropped off', 'drop off', 'date dropped', 'date', 'start date'])),
-    pickedUp: toIsoDate(get(['picked up', 'pickup date', 'date picked up', 'pickup'])),
-  };
 }
 
 function countInPeriod(jobs, periodStart, periodMultiplier, expenses) {
@@ -667,7 +540,6 @@ requireAuth(function (role) {
   if (role === 'admin') {
     document.getElementById('historyImportSection').style.display = 'block';
     document.getElementById('expensesSection').style.display = 'block';
-    setupHistoryImport();
     setupExpensesForm();
   }
   loadStats(role);
