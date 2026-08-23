@@ -9,6 +9,7 @@ app.use(express.json({ limit: '25mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const DATA_FILE = path.join(__dirname, 'data.json');
+const SETTINGS_FILE = path.join(__dirname, 'settings.json');
 
 // ---- storage helpers ----
 function loadJobs() {
@@ -21,6 +22,20 @@ function loadJobs() {
 }
 function saveJobs(jobs) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(jobs, null, 2));
+}
+
+function loadSettings() {
+  if (!fs.existsSync(SETTINGS_FILE)) return { fuelCost: '', payrollCost: '', truckCost: '', yearlyGoal: 750 };
+  try {
+    const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+    if (s.yearlyGoal === undefined) s.yearlyGoal = 750;
+    return s;
+  } catch (e) {
+    return { fuelCost: '', payrollCost: '', truckCost: '', yearlyGoal: 750 };
+  }
+}
+function saveSettings(settings) {
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
 }
 
 // ---- twilio ----
@@ -146,6 +161,22 @@ app.post('/api/verify-pin', (req, res) => {
     return res.json({ ok: true, role: 'driver' });
   }
   res.json({ ok: false });
+});
+
+app.get('/api/settings', (req, res) => {
+  res.json(loadSettings());
+});
+
+app.post('/api/settings', (req, res) => {
+  const { fuelCost, payrollCost, truckCost, yearlyGoal } = req.body;
+  const settings = {
+    fuelCost: fuelCost !== undefined ? fuelCost : '',
+    payrollCost: payrollCost !== undefined ? payrollCost : '',
+    truckCost: truckCost !== undefined ? truckCost : '',
+    yearlyGoal: yearlyGoal !== undefined && yearlyGoal !== '' ? Number(yearlyGoal) : 750,
+  };
+  saveSettings(settings);
+  res.json(settings);
 });
 
 app.get('/api/jobs', (req, res) => {
