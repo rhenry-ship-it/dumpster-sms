@@ -363,11 +363,12 @@ app.get('/api/export.xlsx', async (req, res) => {
 });
 
 app.post('/api/import-assets', (req, res) => {
-  const { assets } = req.body;
+  const { assets, mode } = req.body;
   if (!Array.isArray(assets)) {
     return res.status(400).json({ error: 'assets array required' });
   }
 
+  const isHistory = mode === 'history';
   const jobs = loadJobs();
   let created = 0;
   let updated = 0;
@@ -376,22 +377,45 @@ app.post('/api/import-assets', (req, res) => {
   assets.forEach((a, i) => {
     if (!a.address) return;
 
+    const isCompleted = isHistory && !!a.pickedUp;
     let existing = null;
-    if (a.dumpsterId) {
-      existing = jobs.find(j =>
-        j.type === 'rental' &&
-        j.dumpsterId &&
-        j.dumpsterId.toLowerCase() === a.dumpsterId.toLowerCase() &&
-        !j.completed
-      );
-    }
-    if (!existing) {
-      existing = jobs.find(j =>
-        j.type === 'rental' &&
-        !j.completed &&
-        j.address.toLowerCase() === a.address.toLowerCase() &&
-        (a.customer ? (j.customer || '').toLowerCase() === a.customer.toLowerCase() : true)
-      );
+
+    if (isHistory) {
+      // Historical rows: a dumpster ID gets reused over time, so match a specific
+      // instance by dumpster + drop-off date together, not just the ID alone.
+      if (a.dumpsterId && a.dropoffActualDate) {
+        existing = jobs.find(j =>
+          j.type === 'rental' &&
+          j.dumpsterId &&
+          j.dumpsterId.toLowerCase() === a.dumpsterId.toLowerCase() &&
+          j.dropoffActualDate === a.dropoffActualDate
+        );
+      }
+      if (!existing) {
+        existing = jobs.find(j =>
+          j.type === 'rental' &&
+          j.address.toLowerCase() === a.address.toLowerCase() &&
+          j.dropoffActualDate === a.dropoffActualDate &&
+          (a.customer ? (j.customer || '').toLowerCase() === a.customer.toLowerCase() : true)
+        );
+      }
+    } else {
+      if (a.dumpsterId) {
+        existing = jobs.find(j =>
+          j.type === 'rental' &&
+          j.dumpsterId &&
+          j.dumpsterId.toLowerCase() === a.dumpsterId.toLowerCase() &&
+          !j.completed
+        );
+      }
+      if (!existing) {
+        existing = jobs.find(j =>
+          j.type === 'rental' &&
+          !j.completed &&
+          j.address.toLowerCase() === a.address.toLowerCase() &&
+          (a.customer ? (j.customer || '').toLowerCase() === a.customer.toLowerCase() : true)
+        );
+      }
     }
 
     if (existing) {
@@ -405,6 +429,12 @@ app.post('/api/import-assets', (req, res) => {
         existing.dropDate = a.dropoffActualDate;
       }
       existing.dropoffCompleted = true;
+      if (isHistory && isCompleted) {
+        existing.completed = true;
+        existing.actualPickupDate = a.pickedUp;
+        existing.completedAt = new Date(a.pickedUp).toISOString();
+        if (a.weight) existing.pickupWeight = a.weight;
+      }
       updated++;
     } else {
       jobs.push({
@@ -424,11 +454,11 @@ app.post('/api/import-assets', (req, res) => {
         dropoffCompleted: true,
         dropoffTime: '',
         dropoffActualDate: a.dropoffActualDate || today,
-        completed: false,
-        completedAt: '',
-        pickupWeight: '',
+        completed: isCompleted,
+        completedAt: isCompleted ? new Date(a.pickedUp).toISOString() : '',
+        pickupWeight: isCompleted ? (a.weight || '') : '',
         dumpCost: '',
-        actualPickupDate: '',
+        actualPickupDate: isCompleted ? a.pickedUp : '',
         textResult: { sent: false, reason: 'Imported record — no text sent' },
         createdAt: new Date().toISOString(),
       });
