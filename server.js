@@ -5,7 +5,7 @@ const twilio = require('twilio');
 const ExcelJS = require('exceljs');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const DATA_FILE = path.join(__dirname, 'data.json');
