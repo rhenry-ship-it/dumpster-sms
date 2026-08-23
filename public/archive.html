@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Job Log" />
 <meta name="theme-color" content="#0d2b45" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
     --navy: #0d2b45;
@@ -25,35 +28,63 @@
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: var(--paper);
     color: var(--ink);
-    padding: 0 0 24px;
+    padding: 0 0 32px;
+    -webkit-font-smoothing: antialiased;
   }
+  #topActionBar {
+    position: sticky;
+    top: 0;
+    z-index: 500;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    background: var(--navy);
+    padding: 8px 14px;
+  }
+  .top-action {
+    background: rgba(255,255,255,0.14);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  .top-action:active { background: rgba(255,255,255,0.3); }
   .header {
     background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
-    padding: 20px 20px 24px;
+    padding: 24px 20px 28px;
     text-align: center;
     border-bottom: 4px solid var(--teal);
   }
   .header img {
-    height: 64px;
+    height: 68px;
     width: auto;
     display: block;
-    margin: 0 auto 8px;
+    margin: 0 auto 10px;
+    border-radius: 12px;
   }
   .header p.sub {
     color: #cfe4ee;
     margin: 0;
-    font-size: 13px;
-    letter-spacing: 0.3px;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
   }
-  .content { padding: 20px; }
+  .content { padding: 20px; max-width: 640px; margin: 0 auto; }
   h1 { display: none; }
   form {
     background: white;
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: 16px;
     padding: 18px;
     margin-bottom: 24px;
     box-shadow: 0 2px 10px rgba(13,43,69,0.06);
@@ -112,24 +143,29 @@
   }
   .nav-tabs {
     display: flex;
-    gap: 8px;
-    margin-bottom: 18px;
+    gap: 6px;
+    margin-bottom: 14px;
+    background: #e9eef1;
+    padding: 4px;
+    border-radius: 12px;
   }
   .nav-tabs a {
     flex: 1;
     text-align: center;
-    padding: 10px;
-    border-radius: 7px;
+    padding: 9px 6px;
+    border-radius: 9px;
     text-decoration: none;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
-    border: 1.5px solid var(--navy);
+    border: none;
     color: var(--navy);
-    background: white;
+    background: transparent;
+    transition: background 0.15s, color 0.15s;
   }
   .nav-tabs a.active {
     background: var(--navy);
     color: white;
+    box-shadow: 0 2px 6px rgba(13,43,69,0.25);
   }
   .totals-grid {
     display: grid;
@@ -140,21 +176,22 @@
   .total-card {
     background: white;
     border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px;
+    border-radius: 14px;
+    padding: 16px 14px;
     text-align: center;
-    box-shadow: 0 2px 8px rgba(13,43,69,0.06);
+    box-shadow: 0 3px 12px rgba(13,43,69,0.07);
   }
   .total-card .value {
-    font-size: 24px;
+    font-size: 25px;
     font-weight: 800;
     color: var(--navy);
+    letter-spacing: -0.3px;
   }
   .total-card .label {
-    font-size: 12px;
+    font-size: 11.5px;
     color: #667680;
     font-weight: 600;
-    margin-top: 2px;
+    margin-top: 3px;
     text-transform: uppercase;
     letter-spacing: 0.4px;
   }
@@ -162,14 +199,16 @@
   .type-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
   .type-toggle button {
     flex: 1;
-    padding: 10px;
+    padding: 11px;
     border: 1.5px solid var(--navy);
     background: white;
     color: var(--navy);
-    border-radius: 7px;
+    border-radius: 10px;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
   }
   .type-toggle button.active {
     background: var(--navy);
@@ -178,19 +217,22 @@
   }
   .submit-btn {
     width: 100%;
-    padding: 13px;
+    padding: 14px;
     background: var(--teal);
     color: white;
     border: none;
-    border-radius: 8px;
+    border-radius: 11px;
     font-size: 16px;
     font-weight: 700;
     cursor: pointer;
     margin-top: 4px;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
+    font-family: inherit;
+    box-shadow: 0 3px 10px rgba(43,169,207,0.35);
+    transition: transform 0.1s, background 0.15s;
   }
-  .submit-btn:active { background: var(--teal-dark); }
-  .submit-btn:disabled { opacity: 0.6; }
+  .submit-btn:active { background: var(--teal-dark); transform: scale(0.98); }
+  .submit-btn:disabled { opacity: 0.6; box-shadow: none; }
   #status { margin-top: 10px; font-size: 14px; font-weight: 600; }
   #status.ok { color: var(--ok); }
   #status.err { color: var(--err); }
@@ -198,10 +240,10 @@
     background: white;
     border: 1px solid var(--line);
     border-left: 4px solid var(--teal);
-    border-radius: 10px;
-    padding: 14px;
-    margin-bottom: 10px;
-    box-shadow: 0 1px 6px rgba(13,43,69,0.05);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 10px rgba(13,43,69,0.06);
   }
   .job-top { display: flex; justify-content: space-between; align-items: flex-start; }
   .job-title { font-weight: 700; color: var(--navy); }

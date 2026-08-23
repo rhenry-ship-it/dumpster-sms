@@ -2,9 +2,25 @@ function getRole() {
   return localStorage.getItem('op_role') || '';
 }
 
+function injectTopBar() {
+  if (document.getElementById('topActionBar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'topActionBar';
+  bar.innerHTML = `
+    <a href="index.html" class="top-action">🏠 Home</a>
+    <button id="logoutBtn" class="top-action" type="button">🚪 Log Out</button>
+  `;
+  document.body.insertBefore(bar, document.body.firstChild);
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    localStorage.removeItem('op_role');
+    location.reload();
+  });
+}
+
 function requireAuth(onSuccess) {
   const role = getRole();
   if (role) {
+    injectTopBar();
     onSuccess(role);
     return;
   }
@@ -42,6 +58,7 @@ function requireAuth(onSuccess) {
       if (data.ok) {
         localStorage.setItem('op_role', data.role);
         overlay.remove();
+        injectTopBar();
         onSuccess(data.role);
       } else {
         errEl.textContent = 'Incorrect PIN';
