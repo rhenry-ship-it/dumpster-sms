@@ -39,12 +39,37 @@
     top: 0;
     z-index: 500;
     display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     background: var(--navy);
-    padding: 8px 14px;
+    padding: 0 10px;
+    border-bottom: 3px solid var(--teal);
+  }
+  #navLinks {
+    display: flex;
+    overflow-x: auto;
+    flex: 1;
+    scrollbar-width: none;
+  }
+  #navLinks::-webkit-scrollbar { display: none; }
+  .nav-link {
+    flex: 0 0 auto;
+    color: #cfe4ee;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 14px 12px;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -3px;
+  }
+  .nav-link.active {
+    color: white;
+    border-bottom-color: var(--teal);
   }
   .top-action {
+    flex: 0 0 auto;
     background: rgba(255,255,255,0.14);
     color: white;
     border: none;
@@ -358,17 +383,6 @@
 </div>
 <div class="content">
 
-<div class="nav-tabs">
-  <a href="index.html">New Job</a>
-  <a href="driver.html">Driver</a>
-  <a href="reports.html" class="active">All Jobs &amp; Totals</a>
-  <a href="archive.html">Archive</a>
-</div>
-<div class="nav-tabs">
-  <a href="stats.html">Statistics</a>
-  <a href="assets.html">Asset Tracker</a>
-</div>
-
 <a href="/api/export.xlsx" id="exportBtn" class="submit-btn" style="display:block; text-align:center; text-decoration:none; margin-bottom:20px;">📊 Export to Excel</a>
 
 <div class="totals-grid" id="totalsGrid">
@@ -442,6 +456,29 @@ async function loadAll(role = getRole()) {
     document.querySelectorAll('.delete-btn').forEach(btn => {
       btn.addEventListener('click', () => deleteJob(btn.dataset.id));
     });
+    document.querySelectorAll('.schedule-pickup-form').forEach(form => {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = form.dataset.id;
+        const fd = new FormData(form);
+        const pickupDate = fd.get('pickupDate');
+        const btn = form.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+          await fetch(`/api/jobs/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pickupDate })
+          });
+          loadAll();
+        } catch (err) {
+          alert('Could not save pickup date.');
+          btn.disabled = false;
+          btn.textContent = 'Save';
+        }
+      });
+    });
   } catch (e) {
     pendingEl.innerHTML = '<p style="color:#c62828">Could not load jobs.</p>';
   }
@@ -451,6 +488,9 @@ function renderJob(j, isDriver) {
   const stageLabel = j.type === 'delivery'
     ? (j.completed ? 'Delivered' : 'Awaiting Delivery')
     : (!j.dropoffCompleted ? 'Awaiting Drop-off' : (!j.completed ? 'Awaiting Pickup' : 'Picked Up'));
+
+  const needsPickupDate = j.type !== 'delivery' && j.dropoffCompleted && !j.completed;
+
   return `
     <div class="job ${j.completed ? 'completed' : ''}">
       <div class="job-top">
@@ -468,6 +508,15 @@ function renderJob(j, isDriver) {
       <div class="job-sent ${j.textResult?.sent ? 'ok' : 'err'}">
         ${j.textResult?.sent ? '✓ Texted crew' : '✗ Text not sent'}
       </div>
+      ${(!isDriver && needsPickupDate) ? `
+        <form class="schedule-pickup-form" data-id="${j.id}" style="margin-top:10px; display:flex; gap:8px; align-items:flex-end;">
+          <div style="flex:1;">
+            <label>${j.pickupDate ? 'Reschedule Pickup' : 'Schedule Pickup'}</label>
+            <input type="date" name="pickupDate" value="${j.pickupDate || ''}" />
+          </div>
+          <button type="submit" class="submit-btn" style="width:auto; padding:11px 16px; margin-top:0;">Save</button>
+        </form>
+      ` : ''}
       <div class="job-actions">
         <button class="complete-btn ${j.completed ? 'done' : ''}" data-id="${j.id}" data-completed="${!!j.completed}">
           ${j.completed ? '✓ Completed' : 'Mark Complete'}

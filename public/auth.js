@@ -2,13 +2,26 @@ function getRole() {
   return localStorage.getItem('op_role') || '';
 }
 
+const NAV_LINKS = [
+  { href: 'index.html', label: 'New Job' },
+  { href: 'driver.html', label: 'Driver' },
+  { href: 'reports.html', label: 'Totals' },
+  { href: 'archive.html', label: 'Archive' },
+  { href: 'stats.html', label: 'Statistics' },
+  { href: 'assets.html', label: 'Assets' },
+];
+
 function injectTopBar() {
   if (document.getElementById('topActionBar')) return;
+  const currentPage = location.pathname.split('/').pop() || 'index.html';
+
   const bar = document.createElement('div');
   bar.id = 'topActionBar';
   bar.innerHTML = `
-    <a href="index.html" class="top-action">🏠 Home</a>
-    <button id="logoutBtn" class="top-action" type="button">🚪 Log Out</button>
+    <div id="navLinks">
+      ${NAV_LINKS.map(l => `<a href="${l.href}" class="nav-link${l.href === currentPage ? ' active' : ''}">${l.label}</a>`).join('')}
+    </div>
+    <button id="logoutBtn" class="top-action" type="button">Log Out</button>
   `;
   document.body.insertBefore(bar, document.body.firstChild);
   document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -19,14 +32,13 @@ function injectTopBar() {
 
 function injectSearchBar() {
   if (document.getElementById('globalSearch')) return;
-  const navTabsGroups = document.querySelectorAll('.content .nav-tabs');
-  if (navTabsGroups.length === 0) return;
-  const lastNav = navTabsGroups[navTabsGroups.length - 1];
+  const content = document.querySelector('.content');
+  if (!content) return;
 
   const wrap = document.createElement('div');
   wrap.id = 'searchBarWrap';
   wrap.innerHTML = `<input type="text" id="globalSearch" placeholder="🔍 Search customer, address, dumpster ID…" autocomplete="off" />`;
-  lastNav.insertAdjacentElement('afterend', wrap);
+  content.insertBefore(wrap, content.firstChild);
 
   document.getElementById('globalSearch').addEventListener('input', (e) => {
     const q = e.target.value.trim().toLowerCase();

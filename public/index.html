@@ -39,12 +39,37 @@
     top: 0;
     z-index: 500;
     display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     background: var(--navy);
-    padding: 8px 14px;
+    padding: 0 10px;
+    border-bottom: 3px solid var(--teal);
+  }
+  #navLinks {
+    display: flex;
+    overflow-x: auto;
+    flex: 1;
+    scrollbar-width: none;
+  }
+  #navLinks::-webkit-scrollbar { display: none; }
+  .nav-link {
+    flex: 0 0 auto;
+    color: #cfe4ee;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 14px 12px;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -3px;
+  }
+  .nav-link.active {
+    color: white;
+    border-bottom-color: var(--teal);
   }
   .top-action {
+    flex: 0 0 auto;
     background: rgba(255,255,255,0.14);
     color: white;
     border: none;
@@ -210,6 +235,40 @@
     outline: none;
     border-color: var(--teal);
   }
+  .quick-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+  .quick-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 8px;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 3px 12px rgba(13,43,69,0.08);
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+  .quick-card:active { transform: scale(0.96); box-shadow: 0 1px 6px rgba(13,43,69,0.1); }
+  .quick-card.active-card {
+    border-color: var(--teal);
+    border-width: 2px;
+    background: #f4fafc;
+  }
+  .qc-icon { width: 52px; height: 52px; }
+  .qc-label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--navy);
+    text-align: center;
+    line-height: 1.3;
+  }
   .type-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
   .type-toggle button {
     flex: 1;
@@ -358,18 +417,22 @@
 </div>
 <div class="content">
 
-<div class="nav-tabs">
-  <a href="index.html" class="active">New Job</a>
-  <a href="driver.html">Driver</a>
-  <a href="reports.html">All Jobs &amp; Totals</a>
-  <a href="archive.html">Archive</a>
-</div>
-<div class="nav-tabs">
-  <a href="stats.html">Statistics</a>
-  <a href="assets.html">Asset Tracker</a>
+<div class="quick-actions">
+  <button type="button" class="quick-card" id="qcRental">
+    <svg viewBox="0 0 100 100" class="qc-icon"><rect x="18" y="38" width="64" height="42" rx="4" fill="var(--navy)"/><path d="M14 38 L86 38 L76 24 L24 24 Z" fill="var(--teal)"/><rect x="24" y="48" width="52" height="6" fill="rgba(255,255,255,0.35)"/><rect x="24" y="60" width="52" height="6" fill="rgba(255,255,255,0.2)"/></svg>
+    <div class="qc-label">New Dumpster<br/>Rental</div>
+  </button>
+  <button type="button" class="quick-card" id="qcDelivery">
+    <svg viewBox="0 0 100 100" class="qc-icon"><path d="M20 78 Q50 30 80 78 Z" fill="var(--teal)"/><path d="M35 78 Q50 48 65 78 Z" fill="var(--navy)"/><circle cx="28" cy="72" r="4" fill="rgba(255,255,255,0.4)"/><circle cx="55" cy="66" r="3" fill="rgba(255,255,255,0.4)"/><circle cx="70" cy="73" r="3.5" fill="rgba(255,255,255,0.4)"/></svg>
+    <div class="qc-label">New Material<br/>Delivery</div>
+  </button>
+  <button type="button" class="quick-card" id="qcPickup">
+    <svg viewBox="0 0 100 100" class="qc-icon"><rect x="10" y="46" width="46" height="28" rx="3" fill="var(--navy)"/><path d="M56 52 L78 52 L88 66 L88 74 L56 74 Z" fill="var(--teal)"/><circle cx="30" cy="78" r="8" fill="var(--ink)"/><circle cx="74" cy="78" r="8" fill="var(--ink)"/><circle cx="30" cy="78" r="3" fill="#cfe4ee"/><circle cx="74" cy="78" r="3" fill="#cfe4ee"/></svg>
+    <div class="qc-label">Schedule<br/>Pickup</div>
+  </button>
 </div>
 
-<form id="jobForm">
+<form id="jobForm" style="display:none;">
   <div class="type-toggle">
     <button type="button" data-type="rental" class="active">🗑️ Rental</button>
     <button type="button" data-type="delivery">📦 Material Delivery</button>
@@ -459,12 +522,104 @@
   <div id="status"></div>
 </form>
 
+<div id="pickupPanel" style="display:none;">
+  <h2>Schedule a Pickup</h2>
+  <p style="font-size:13px; color:#667680; margin-top:-8px;">Pick a dumpster currently on site and set its pickup date.</p>
+  <div id="pickupSelectList">Loading…</div>
+</div>
+
 <h2>Recent Jobs</h2>
 <div id="jobList">Loading…</div>
 
 <script src="auth.js"></script>
 <script>
 let currentType = 'rental';
+
+function showForm(type) {
+  document.getElementById('jobForm').style.display = 'block';
+  document.getElementById('pickupPanel').style.display = 'none';
+  document.querySelector(`.type-toggle button[data-type="${type}"]`).click();
+  document.getElementById('jobForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+document.getElementById('qcRental').addEventListener('click', () => {
+  setActiveCard('qcRental');
+  showForm('rental');
+});
+document.getElementById('qcDelivery').addEventListener('click', () => {
+  setActiveCard('qcDelivery');
+  showForm('delivery');
+});
+document.getElementById('qcPickup').addEventListener('click', () => {
+  setActiveCard('qcPickup');
+  document.getElementById('jobForm').style.display = 'none';
+  const panel = document.getElementById('pickupPanel');
+  panel.style.display = 'block';
+  loadPickupCandidates();
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+function setActiveCard(id) {
+  document.querySelectorAll('.quick-card').forEach(c => c.classList.remove('active-card'));
+  document.getElementById(id).classList.add('active-card');
+}
+
+async function loadPickupCandidates() {
+  const listEl = document.getElementById('pickupSelectList');
+  listEl.innerHTML = 'Loading…';
+  try {
+    const res = await fetch('/api/jobs');
+    const jobs = await res.json();
+    const onSite = jobs.filter(j => j.type !== 'delivery' && j.dropoffCompleted && !j.completed);
+
+    if (onSite.length === 0) {
+      listEl.innerHTML = '<p style="color:#999">No dumpsters currently on site.</p>';
+      return;
+    }
+
+    listEl.innerHTML = onSite.map(j => `
+      <div class="job">
+        <div class="job-top">
+          <div class="job-title">${escapeHtml(j.customer)}</div>
+          <div class="job-badge">${j.dumpsterId ? '#' + escapeHtml(j.dumpsterId) : escapeHtml(j.size || 'Rental')}</div>
+        </div>
+        <div class="job-meta">${escapeHtml(j.address)}${j.pickupDate ? ' · Scheduled: ' + j.pickupDate : ' · No pickup date yet'}</div>
+        <form class="schedule-form" data-id="${j.id}" style="margin-top:10px; display:flex; gap:8px; align-items:flex-end;">
+          <div style="flex:1;">
+            <label>Pickup Date</label>
+            <input type="date" name="pickupDate" value="${j.pickupDate || ''}" required />
+          </div>
+          <button type="submit" class="submit-btn" style="width:auto; padding:11px 16px; margin-top:0;">Save</button>
+        </form>
+      </div>
+    `).join('');
+
+    document.querySelectorAll('.schedule-form').forEach(form => {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = form.dataset.id;
+        const fd = new FormData(form);
+        const btn = form.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+          await fetch(`/api/jobs/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pickupDate: fd.get('pickupDate') })
+          });
+          btn.textContent = '✓ Saved';
+        } catch (err) {
+          alert('Could not save pickup date.');
+          btn.disabled = false;
+          btn.textContent = 'Save';
+        }
+      });
+    });
+  } catch (e) {
+    listEl.innerHTML = '<p style="color:#c62828">Could not load dumpsters.</p>';
+  }
+}
 
 document.querySelectorAll('.type-toggle button').forEach(btn => {
   btn.addEventListener('click', () => {

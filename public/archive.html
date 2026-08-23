@@ -39,12 +39,37 @@
     top: 0;
     z-index: 500;
     display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     background: var(--navy);
-    padding: 8px 14px;
+    padding: 0 10px;
+    border-bottom: 3px solid var(--teal);
+  }
+  #navLinks {
+    display: flex;
+    overflow-x: auto;
+    flex: 1;
+    scrollbar-width: none;
+  }
+  #navLinks::-webkit-scrollbar { display: none; }
+  .nav-link {
+    flex: 0 0 auto;
+    color: #cfe4ee;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 14px 12px;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -3px;
+  }
+  .nav-link.active {
+    color: white;
+    border-bottom-color: var(--teal);
   }
   .top-action {
+    flex: 0 0 auto;
     background: rgba(255,255,255,0.14);
     color: white;
     border: none;
@@ -348,6 +373,17 @@
     cursor: pointer;
   }
   #authError { color: var(--err); font-size: 13px; font-weight: 600; margin-top: 10px; }
+  .archive-item { margin-bottom: 12px; }
+  .archive-item .job { margin-bottom: 0; }
+  .archive-row { cursor: pointer; }
+  .archive-row.open { border-radius: 14px 14px 0 0; background: #f4fafc; }
+  .archive-edit-wrap {
+    background: #f4fafc;
+    border: 1px solid var(--line);
+    border-top: none;
+    border-radius: 0 0 14px 14px;
+    padding: 14px 16px;
+  }
 </style>
 </head>
 <body>
@@ -357,17 +393,6 @@
   <p class="sub">ARCHIVE — completed more than 24 hours ago</p>
 </div>
 <div class="content">
-
-<div class="nav-tabs">
-  <a href="index.html">New Job</a>
-  <a href="driver.html">Driver</a>
-  <a href="reports.html">All Jobs &amp; Totals</a>
-  <a href="archive.html" class="active">Archive</a>
-</div>
-<div class="nav-tabs">
-  <a href="stats.html">Statistics</a>
-  <a href="assets.html">Asset Tracker</a>
-</div>
 
 <h2>Archived Jobs</h2>
 <div id="archiveList">Loading…</div>
@@ -382,6 +407,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 async function loadArchive(role = getRole()) {
   const isDriver = role === 'driver';
+  const isAdmin = role === 'admin';
   const listEl = document.getElementById('archiveList');
   try {
     const res = await fetch('/api/jobs');
@@ -394,27 +420,11 @@ async function loadArchive(role = getRole()) {
       return;
     }
 
-    listEl.innerHTML = archived.map(j => `
-      <div class="job completed">
-        <div class="job-top">
-          <div class="job-title">${escapeHtml(j.customer)}</div>
-          <div class="job-badge">${j.type === 'delivery' ? 'Delivery' : 'Rental'}${j.tripLabel ? ' · ' + escapeHtml(j.tripLabel) : ''}</div>
-        </div>
-        <div class="job-meta">
-          ${escapeHtml(j.address)}<br/>
-          ${j.type === 'delivery'
-            ? `${j.material ? escapeHtml(j.material) + ' · ' : ''}${j.yards ? j.yards + ' YD · ' : ''}`
-            : `${j.size ? escapeHtml(j.size) + ' · ' : ''}${j.dumpsterId ? '#' + escapeHtml(j.dumpsterId) + ' · ' : ''}`
-          }${j.dropDate || ''}${(!isDriver && j.price) ? ' · $' + j.price : ''}${(!isDriver && j.pickupWeight) ? ' · ' + j.pickupWeight + ' tons' : ''}${(!isDriver && j.dumpCost) ? ' · $' + j.dumpCost + ' dump fee' : ''}
-        </div>
-        <div class="job-actions">
-          ${isDriver ? '' : `<button class="delete-btn" data-id="${j.id}">Delete</button>`}
-        </div>
-      </div>
-    `).join('');
+    listEl.innerHTML = archived.map(j => renderArchiveRow(j, isDriver, isAdmin)).join('');
 
     document.querySelectorAll('.delete-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
         if (!confirm('Delete this job? This cannot be undone.')) return;
         try {
           await fetch(`/api/jobs/${btn.dataset.id}`, { method: 'DELETE' });
@@ -424,9 +434,129 @@ async function loadArchive(role = getRole()) {
         }
       });
     });
+
+    if (isAdmin) {
+      document.querySelectorAll('.archive-row[data-target]').forEach(rowEl => {
+        rowEl.addEventListener('click', () => {
+          const wrap = document.getElementById(rowEl.dataset.target);
+          if (!wrap) return;
+          const isOpen = wrap.style.display === 'block';
+          wrap.style.display = isOpen ? 'none' : 'block';
+          rowEl.classList.toggle('open', !isOpen);
+        });
+      });
+
+      document.querySelectorAll('.archive-edit-form').forEach(form => {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const id = form.dataset.id;
+          const fd = new FormData(form);
+          const body = Object.fromEntries(fd.entries());
+          const btn = form.querySelector('button[type="submit"]');
+          btn.disabled = true;
+          btn.textContent = 'Saving…';
+          try {
+            await fetch(`/api/jobs/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            loadArchive();
+          } catch (err) {
+            alert('Could not save changes.');
+            btn.disabled = false;
+            btn.textContent = 'Save Changes';
+          }
+        });
+      });
+    }
   } catch (e) {
     listEl.innerHTML = '<p style="color:#c62828">Could not load jobs.</p>';
   }
+}
+
+function renderArchiveRow(j, isDriver, isAdmin) {
+  const rowInner = `
+    <div class="job-top">
+      <div class="job-title">${escapeHtml(j.customer)}</div>
+      <div class="job-badge">${j.type === 'delivery' ? 'Delivery' : 'Rental'}${j.tripLabel ? ' · ' + escapeHtml(j.tripLabel) : ''}</div>
+    </div>
+    <div class="job-meta">
+      ${escapeHtml(j.address)}<br/>
+      ${j.type === 'delivery'
+        ? `${j.material ? escapeHtml(j.material) + ' · ' : ''}${j.yards ? j.yards + ' YD · ' : ''}`
+        : `${j.size ? escapeHtml(j.size) + ' · ' : ''}${j.dumpsterId ? '#' + escapeHtml(j.dumpsterId) + ' · ' : ''}`
+      }${j.dropDate || ''}${(!isDriver && j.price) ? ' · $' + j.price : ''}${(!isDriver && j.pickupWeight) ? ' · ' + j.pickupWeight + ' tons' : ''}${(!isDriver && j.dumpCost) ? ' · $' + j.dumpCost + ' dump fee' : ''}
+    </div>
+  `;
+
+  if (!isAdmin) {
+    return `
+      <div class="job completed">
+        ${rowInner}
+        <div class="job-actions">
+          ${isDriver ? '' : `<button class="delete-btn" data-id="${j.id}">Delete</button>`}
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="archive-item">
+      <div class="job completed archive-row" data-target="archive-edit-${j.id}">
+        ${rowInner}
+        <div class="job-actions">
+          <button class="delete-btn" data-id="${j.id}">Delete</button>
+        </div>
+      </div>
+      <div class="archive-edit-wrap" id="archive-edit-${j.id}" style="display:none;">
+        <form class="archive-edit-form" data-id="${j.id}">
+          <div class="row">
+            <div>
+              <label>Customer</label>
+              <input name="customer" value="${escapeHtml(j.customer)}" />
+            </div>
+            <div>
+              <label>Address</label>
+              <input name="address" value="${escapeHtml(j.address)}" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>${j.type === 'delivery' ? 'Material' : 'Size'}</label>
+              <input name="${j.type === 'delivery' ? 'material' : 'size'}" value="${escapeHtml(j.type === 'delivery' ? (j.material || '') : (j.size || ''))}" />
+            </div>
+            <div>
+              <label>Dumpster ID</label>
+              <input name="dumpsterId" value="${escapeHtml(j.dumpsterId || '')}" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>Price ($)</label>
+              <input type="number" step="0.01" name="price" value="${escapeHtml(j.price || '')}" />
+            </div>
+            <div>
+              <label>Pickup Weight (tons)</label>
+              <input type="number" step="0.01" name="pickupWeight" value="${escapeHtml(j.pickupWeight || '')}" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>Dump Cost ($)</label>
+              <input type="number" step="0.01" name="dumpCost" value="${escapeHtml(j.dumpCost || '')}" />
+            </div>
+            <div>
+              <label>Actual Pickup Date</label>
+              <input type="date" name="actualPickupDate" value="${j.actualPickupDate || ''}" />
+            </div>
+          </div>
+          <button type="submit" class="submit-btn">Save Changes</button>
+        </form>
+      </div>
+    </div>
+  `;
 }
 
 requireAuth(loadArchive);

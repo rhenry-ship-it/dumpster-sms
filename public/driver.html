@@ -39,12 +39,37 @@
     top: 0;
     z-index: 500;
     display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     background: var(--navy);
-    padding: 8px 14px;
+    padding: 0 10px;
+    border-bottom: 3px solid var(--teal);
+  }
+  #navLinks {
+    display: flex;
+    overflow-x: auto;
+    flex: 1;
+    scrollbar-width: none;
+  }
+  #navLinks::-webkit-scrollbar { display: none; }
+  .nav-link {
+    flex: 0 0 auto;
+    color: #cfe4ee;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 14px 12px;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -3px;
+  }
+  .nav-link.active {
+    color: white;
+    border-bottom-color: var(--teal);
   }
   .top-action {
+    flex: 0 0 auto;
     background: rgba(255,255,255,0.14);
     color: white;
     border: none;
@@ -348,9 +373,7 @@
     cursor: pointer;
   }
   #authError { color: var(--err); font-size: 13px; font-weight: 600; margin-top: 10px; }
-  .pickup-item {
-    margin-bottom: 10px;
-  }
+  .pickup-item { margin-bottom: 10px; }
   .pickup-row {
     width: 100%;
     display: flex;
@@ -394,17 +417,6 @@
 </div>
 <div class="content">
 
-<div class="nav-tabs">
-  <a href="index.html">New Job</a>
-  <a href="driver.html" class="active">Driver</a>
-  <a href="reports.html">All Jobs &amp; Totals</a>
-  <a href="archive.html">Archive</a>
-</div>
-<div class="nav-tabs">
-  <a href="stats.html">Statistics</a>
-  <a href="assets.html">Asset Tracker</a>
-</div>
-
 <div class="section-label">Drop-offs</div>
 <div id="dropoffList">Loading…</div>
 
@@ -435,7 +447,12 @@ async function loadTasks() {
     const jobs = await res.json();
 
     const dropoffs = jobs.filter(j => j.type !== 'delivery' && !j.dropoffCompleted && !j.completed);
-    const pickupsRaw = jobs.filter(j => j.type !== 'delivery' && j.dropoffCompleted && !j.completed);
+    const pickupsRaw = jobs.filter(j =>
+      j.type !== 'delivery' &&
+      j.dropoffCompleted &&
+      !j.completed &&
+      !(j.notes === 'Imported from spreadsheet' && !j.pickupDate)
+    );
     const deliveries = jobs.filter(j => j.type === 'delivery' && !j.completed);
 
     // Pickups with a scheduled date rotate to the top (soonest first);
