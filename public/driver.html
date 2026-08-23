@@ -242,80 +242,134 @@
     padding: 8px 14px;
   }
   h2 { font-size: 16px; margin: 0 0 10px; color: var(--navy); }
+  .section-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #667680;
+    margin: 18px 0 8px;
+  }
+  #authOverlay {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .auth-box {
+    background: white;
+    border-radius: 14px;
+    padding: 28px 24px;
+    text-align: center;
+    max-width: 320px;
+    width: 100%;
+  }
+  .auth-box img { height: 56px; margin-bottom: 14px; }
+  .auth-box p { font-weight: 700; color: var(--navy); margin: 0 0 12px; }
+  .auth-box input {
+    width: 100%;
+    padding: 12px;
+    font-size: 20px;
+    text-align: center;
+    letter-spacing: 4px;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .auth-box button {
+    width: 100%;
+    padding: 12px;
+    background: var(--teal);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  #authError { color: var(--err); font-size: 13px; font-weight: 600; margin-top: 10px; }
 </style>
 </head>
 <body>
 
 <div class="header">
   <img src="logo.jpeg" alt="Oak & Pallet Disposal Corporation" />
-  <p class="sub">DRIVER — today's pickups &amp; deliveries</p>
+  <p class="sub">DRIVER — today's tasks</p>
 </div>
 <div class="content">
 
-<div class="nav-tabs">
-  <a href="index.html">New Job</a>
-  <a href="driver.html" class="active">Driver</a>
-  <a href="reports.html">All Jobs &amp; Totals</a>
-  <a href="archive.html">Archive</a>
-</div>
+<div class="section-label">Drop-offs</div>
+<div id="dropoffList">Loading…</div>
 
-<h2>To-Do</h2>
-<div id="todoList">Loading…</div>
+<div class="section-label">Pick-ups</div>
+<div id="pickupList"></div>
 
+<div class="section-label">Material Deliveries</div>
+<div id="deliveryList"></div>
+
+<script src="auth.js"></script>
 <script>
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-async function loadTodo() {
-  const listEl = document.getElementById('todoList');
+function nowTimeString() {
+  const d = new Date();
+  return d.toTimeString().slice(0, 5);
+}
+
+async function loadTasks() {
+  const dropoffEl = document.getElementById('dropoffList');
+  const pickupEl = document.getElementById('pickupList');
+  const deliveryEl = document.getElementById('deliveryList');
+
   try {
     const res = await fetch('/api/jobs');
     const jobs = await res.json();
-    const todo = jobs.filter(j => !j.completed);
 
-    if (todo.length === 0) {
-      listEl.innerHTML = '<p style="color:#999">Nothing left to do. 🎉</p>';
-      return;
-    }
+    const dropoffs = jobs.filter(j => j.type !== 'delivery' && !j.dropoffCompleted && !j.completed);
+    const pickupsRaw = jobs.filter(j => j.type !== 'delivery' && j.dropoffCompleted && !j.completed);
+    const deliveries = jobs.filter(j => j.type === 'delivery' && !j.completed);
 
-    listEl.innerHTML = todo.map(j => {
-      const isDelivery = j.type === 'delivery';
-      return `
-      <div class="job">
-        <div class="job-top">
-          <div class="job-title">${escapeHtml(j.customer)}</div>
-          <div class="job-badge">${isDelivery ? 'Delivery' : 'Pickup'}${j.tripLabel ? ' · ' + escapeHtml(j.tripLabel) : ''}</div>
-        </div>
-        <div class="job-meta">
-          ${escapeHtml(j.address)}<br/>
-          ${isDelivery
-            ? `${j.material ? escapeHtml(j.material) + ' · ' : ''}${j.yards ? j.yards + ' YD' : ''}`
-            : `${j.size ? escapeHtml(j.size) : ''}${j.dropDate ? ' · Dropped ' + j.dropDate : ''}`
-          }
-        </div>
-        ${isDelivery ? `
-          <div class="job-actions">
-            <button class="quick-complete-btn" data-id="${j.id}">Mark Delivered</button>
-          </div>
-        ` : `
-          <form class="pickup-form" data-id="${j.id}">
-            <div class="row">
-              <div>
-                <label>Weight (tons)</label>
-                <input type="number" step="0.01" name="pickupWeight" placeholder="e.g. 2.5" required />
-              </div>
-              <div>
-                <label>Dump Cost ($)</label>
-                <input type="number" step="0.01" name="dumpCost" placeholder="e.g. 180" required />
-              </div>
-            </div>
-            <button type="submit" class="submit-btn">Log Pickup &amp; Complete</button>
-          </form>
-        `}
-      </div>
-    `;
-    }).join('');
+    // Pickups with a scheduled date rotate to the top (soonest first);
+    // ones with no set date stay below, in the order they were dropped off.
+    const withDate = pickupsRaw.filter(j => j.pickupDate).sort((a, b) => new Date(a.pickupDate) - new Date(b.pickupDate));
+    const withoutDate = pickupsRaw.filter(j => !j.pickupDate);
+    const pickups = [...withDate, ...withoutDate];
+
+    dropoffEl.innerHTML = dropoffs.length ? dropoffs.map(renderDropoff).join('') : '<p style="color:#999">No drop-offs pending.</p>';
+    pickupEl.innerHTML = pickups.length ? pickups.map(renderPickup).join('') : '<p style="color:#999">No pick-ups pending.</p>';
+    deliveryEl.innerHTML = deliveries.length ? deliveries.map(renderDelivery).join('') : '<p style="color:#999">No deliveries pending.</p>';
+
+    document.querySelectorAll('.dropoff-form').forEach(form => {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = form.dataset.id;
+        const fd = new FormData(form);
+        const body = Object.fromEntries(fd.entries());
+        body.dropoffCompleted = true;
+
+        const btn = form.querySelector('.submit-btn');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+          await fetch(`/api/jobs/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          loadTasks();
+        } catch (e) {
+          alert('Could not save drop-off.');
+          btn.disabled = false;
+          btn.textContent = 'Log Drop-off';
+        }
+      });
+    });
 
     document.querySelectorAll('.pickup-form').forEach(form => {
       form.addEventListener('submit', async (e) => {
@@ -329,14 +383,13 @@ async function loadTodo() {
         const btn = form.querySelector('.submit-btn');
         btn.disabled = true;
         btn.textContent = 'Saving…';
-
         try {
           await fetch(`/api/jobs/${id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
           });
-          loadTodo();
+          loadTasks();
         } catch (e) {
           alert('Could not save pickup.');
           btn.disabled = false;
@@ -355,7 +408,7 @@ async function loadTodo() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ completed: true })
           });
-          loadTodo();
+          loadTasks();
         } catch (e) {
           alert('Could not update job.');
           btn.disabled = false;
@@ -364,11 +417,85 @@ async function loadTodo() {
       });
     });
   } catch (e) {
-    listEl.innerHTML = '<p style="color:#c62828">Could not load jobs.</p>';
+    dropoffEl.innerHTML = '<p style="color:#c62828">Could not load jobs.</p>';
   }
 }
 
-loadTodo();
+function renderDropoff(j) {
+  return `
+    <div class="job">
+      <div class="job-top">
+        <div class="job-title">${escapeHtml(j.customer)}</div>
+        <div class="job-badge">${escapeHtml(j.size || 'Rental')}</div>
+      </div>
+      <div class="job-meta">
+        ${escapeHtml(j.address)}<br/>
+        Scheduled drop-off: ${j.dropDate || '—'}
+      </div>
+      <form class="dropoff-form" data-id="${j.id}">
+        <div class="row">
+          <div>
+            <label>Time Dropped Off</label>
+            <input type="time" name="dropoffTime" value="${nowTimeString()}" required />
+          </div>
+          <div>
+            <label>Dumpster ID</label>
+            <input type="text" name="dumpsterId" placeholder="e.g. D-114" required />
+          </div>
+        </div>
+        <button type="submit" class="submit-btn">Log Drop-off</button>
+      </form>
+    </div>
+  `;
+}
+
+function renderPickup(j) {
+  return `
+    <div class="job">
+      <div class="job-top">
+        <div class="job-title">${escapeHtml(j.customer)}</div>
+        <div class="job-badge">${escapeHtml(j.size || 'Rental')}${j.dumpsterId ? ' · #' + escapeHtml(j.dumpsterId) : ''}</div>
+      </div>
+      <div class="job-meta">
+        ${escapeHtml(j.address)}<br/>
+        ${j.pickupDate ? 'Scheduled pickup: ' + j.pickupDate : 'No pickup date set yet'}
+      </div>
+      <form class="pickup-form" data-id="${j.id}">
+        <div class="row">
+          <div>
+            <label>Weight (tons)</label>
+            <input type="number" step="0.01" name="pickupWeight" placeholder="e.g. 2.5" required />
+          </div>
+          <div>
+            <label>Dump Cost ($)</label>
+            <input type="number" step="0.01" name="dumpCost" placeholder="e.g. 180" required />
+          </div>
+        </div>
+        <button type="submit" class="submit-btn">Log Pickup &amp; Complete</button>
+      </form>
+    </div>
+  `;
+}
+
+function renderDelivery(j) {
+  return `
+    <div class="job">
+      <div class="job-top">
+        <div class="job-title">${escapeHtml(j.customer)}</div>
+        <div class="job-badge">Delivery${j.tripLabel ? ' · ' + escapeHtml(j.tripLabel) : ''}</div>
+      </div>
+      <div class="job-meta">
+        ${escapeHtml(j.address)}<br/>
+        ${j.material ? escapeHtml(j.material) + ' · ' : ''}${j.yards ? j.yards + ' YD' : ''}
+      </div>
+      <div class="job-actions">
+        <button class="quick-complete-btn" data-id="${j.id}">Mark Delivered</button>
+      </div>
+    </div>
+  `;
+}
+
+requireAuth('driver', loadTasks);
 </script>
 
 </div>

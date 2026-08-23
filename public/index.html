@@ -242,6 +242,56 @@
     padding: 8px 14px;
   }
   h2 { font-size: 16px; margin: 0 0 10px; color: var(--navy); }
+  .section-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #667680;
+    margin: 18px 0 8px;
+  }
+  #authOverlay {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .auth-box {
+    background: white;
+    border-radius: 14px;
+    padding: 28px 24px;
+    text-align: center;
+    max-width: 320px;
+    width: 100%;
+  }
+  .auth-box img { height: 56px; margin-bottom: 14px; }
+  .auth-box p { font-weight: 700; color: var(--navy); margin: 0 0 12px; }
+  .auth-box input {
+    width: 100%;
+    padding: 12px;
+    font-size: 20px;
+    text-align: center;
+    letter-spacing: 4px;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .auth-box button {
+    width: 100%;
+    padding: 12px;
+    background: var(--teal);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  #authError { color: var(--err); font-size: 13px; font-weight: 600; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -257,6 +307,9 @@
   <a href="driver.html">Driver</a>
   <a href="reports.html">All Jobs &amp; Totals</a>
   <a href="archive.html">Archive</a>
+</div>
+<div class="nav-tabs">
+  <a href="stats.html">Statistics</a>
 </div>
 
 <form id="jobForm">
@@ -352,6 +405,7 @@
 <h2>Recent Jobs</h2>
 <div id="jobList">Loading…</div>
 
+<script src="auth.js"></script>
 <script>
 let currentType = 'rental';
 
@@ -558,7 +612,7 @@ function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-loadJobs();
+requireAuth('admin', loadJobs);
 </script>
 
 </div>
