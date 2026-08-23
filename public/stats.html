@@ -383,6 +383,34 @@
 </div>
 <div class="content">
 
+<div id="expensesSection" style="display:none;">
+  <div class="section-label">Ballpark Monthly Operating Expenses</div>
+  <form id="expensesForm">
+    <div class="row">
+      <div>
+        <label>Fuel ($/mo)</label>
+        <input type="number" step="0.01" name="fuelCost" placeholder="e.g. 2500" />
+      </div>
+      <div>
+        <label>Payroll ($/mo)</label>
+        <input type="number" step="0.01" name="payrollCost" placeholder="e.g. 12000" />
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Truck/Maintenance/Insurance ($/mo)</label>
+        <input type="number" step="0.01" name="truckCost" placeholder="e.g. 1800" />
+      </div>
+      <div>
+        <label>Yearly Rental Goal</label>
+        <input type="number" step="1" name="yearlyGoal" placeholder="750" />
+      </div>
+    </div>
+    <button type="submit" class="submit-btn">Save</button>
+    <div id="expensesStatus" style="font-size:13px; font-weight:600; margin-top:6px;"></div>
+  </form>
+</div>
+
 <div class="section-label">This Week</div>
 <div class="totals-grid" id="weekGrid"></div>
 
@@ -540,7 +568,7 @@ function normalizeHistoryRow(row) {
   };
 }
 
-function countInPeriod(jobs, periodStart) {
+function countInPeriod(jobs, periodStart, periodMultiplier, expenses) {
   const dropped = jobs.filter(j => j.type !== 'delivery' && j.dropoffCompleted && j.dropoffDate_computed && j.dropoffDate_computed >= periodStart).length;
   const pickedJobs = jobs.filter(j => j.type !== 'delivery' && j.completed && j.actualPickupDate && new Date(j.actualPickupDate) >= periodStart);
   function parseMoney(val) {
@@ -552,13 +580,19 @@ function countInPeriod(jobs, periodStart) {
   const dumpCost = pickedJobs.reduce((s, j) => s + parseMoney(j.dumpCost), 0);
   const grossProfit = revenue - dumpCost;
   const dumpRatio = revenue > 0 ? (dumpCost / revenue) * 100 : 0;
-  return { dropped, picked: pickedJobs.length, revenue, dumpCost, grossProfit, dumpRatio };
+
+  const periodExpenses = (parseMoney(expenses.fuelCost) + parseMoney(expenses.payrollCost) + parseMoney(expenses.truckCost)) * periodMultiplier;
+  const netProfit = grossProfit - periodExpenses;
+
+  return { dropped, picked: pickedJobs.length, revenue, dumpCost, grossProfit, dumpRatio, periodExpenses, netProfit };
 }
 
 function renderGrid(elId, stats, isAdmin) {
   const financialCards = isAdmin ? `
     <div class="total-card"><div class="value">$${stats.grossProfit.toFixed(2)}</div><div class="label">Gross Profit</div></div>
     <div class="total-card"><div class="value">${stats.dumpRatio.toFixed(1)}%</div><div class="label">Dump Cost % of Rev</div></div>
+    <div class="total-card"><div class="value">$${stats.periodExpenses.toFixed(2)}</div><div class="label">Ballpark Expenses</div></div>
+    <div class="total-card teal"><div class="value">$${stats.netProfit.toFixed(2)}</div><div class="label">Net Profit</div></div>
   ` : '';
   document.getElementById(elId).innerHTML = `
     <div class="total-card"><div class="value">${stats.dropped}</div><div class="label">Dropped Off</div></div>
@@ -570,8 +604,12 @@ function renderGrid(elId, stats, isAdmin) {
 async function loadStats(role = getRole()) {
   const isAdmin = role === 'admin';
   try {
-    const res = await fetch('/api/jobs');
-    const jobs = await res.json();
+    const [jobsRes, settingsRes] = await Promise.all([
+      fetch('/api/jobs'),
+      fetch('/api/settings'),
+    ]);
+    const jobs = await jobsRes.json();
+    const expenses = await settingsRes.json();
     const now = new Date();
 
     // Drop-off events are dated by createdAt (the day the drop-off slip was logged),
@@ -582,19 +620,60 @@ async function loadStats(role = getRole()) {
         : (j.dropoffCompleted && j.createdAt ? new Date(j.createdAt) : null);
     });
 
-    renderGrid('weekGrid', countInPeriod(jobs, startOfWeek(now)), isAdmin);
-    renderGrid('monthGrid', countInPeriod(jobs, startOfMonth(now)), isAdmin);
-    renderGrid('quarterGrid', countInPeriod(jobs, startOfQuarter(now)), isAdmin);
-    renderGrid('yearGrid', countInPeriod(jobs, startOfYear(now)), isAdmin);
+    // Multipliers are relative to the monthly ballpark figure entered.
+    renderGrid('weekGrid', countInPeriod(jobs, startOfWeek(now), 12 / 52, expenses), isAdmin);
+    renderGrid('monthGrid', countInPeriod(jobs, startOfMonth(now), 1, expenses), isAdmin);
+    renderGrid('quarterGrid', countInPeriod(jobs, startOfQuarter(now), 3, expenses), isAdmin);
+    renderGrid('yearGrid', countInPeriod(jobs, startOfYear(now), 12, expenses), isAdmin);
   } catch (e) {
     document.getElementById('weekGrid').innerHTML = '<p style="color:#c62828">Could not load stats.</p>';
   }
 }
 
+async function setupExpensesForm() {
+  const form = document.getElementById('expensesForm');
+  const statusEl = document.getElementById('expensesStatus');
+
+  try {
+    const res = await fetch('/api/settings');
+    const settings = await res.json();
+    form.fuelCost.value = settings.fuelCost || '';
+    form.payrollCost.value = settings.payrollCost || '';
+    form.truckCost.value = settings.truckCost || '';
+    form.yearlyGoal.value = settings.yearlyGoal || 750;
+  } catch (e) {}
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const body = Object.fromEntries(fd.entries());
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      statusEl.style.color = 'var(--ok)';
+      statusEl.textContent = '✅ Saved.';
+      loadStats();
+    } catch (err) {
+      statusEl.style.color = 'var(--err)';
+      statusEl.textContent = 'Could not save.';
+    }
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  });
+}
+
 requireAuth(function (role) {
   if (role === 'admin') {
     document.getElementById('historyImportSection').style.display = 'block';
+    document.getElementById('expensesSection').style.display = 'block';
     setupHistoryImport();
+    setupExpensesForm();
   }
   loadStats(role);
 });

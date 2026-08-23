@@ -432,6 +432,11 @@
   </button>
 </div>
 
+<div id="gaugeWrap" style="text-align:center; margin-bottom:22px;">
+  <div id="gaugeSvgHolder"></div>
+  <div id="gaugeReadout" style="font-size:14px; font-weight:700; color:var(--navy); margin-top:6px;">Loading…</div>
+</div>
+
 <form id="jobForm" style="display:none;">
   <div class="type-toggle">
     <button type="button" data-type="rental" class="active">🗑️ Rental</button>
@@ -826,7 +831,59 @@ function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-requireAuth(loadJobs);
+function startOfYear(d) { return new Date(d.getFullYear(), 0, 1); }
+
+function renderGauge(count, goal) {
+  const fraction = goal > 0 ? Math.min(count / goal, 1) : 0;
+  const pct = goal > 0 ? Math.round((count / goal) * 100) : 0;
+  const r = 80;
+  const circumference = Math.PI * r;
+  const dashOffset = circumference * (1 - fraction);
+
+  let color = 'var(--err)';
+  if (fraction >= 0.75) color = 'var(--ok)';
+  else if (fraction >= 0.4) color = '#e0a83d';
+
+  const svg = `
+    <svg viewBox="0 0 200 115" style="width:100%; max-width:280px;">
+      <path d="M 20 100 A ${r} ${r} 0 0 1 180 100" fill="none" stroke="#e2e8ec" stroke-width="16" stroke-linecap="round" />
+      <path d="M 20 100 A ${r} ${r} 0 0 1 180 100" fill="none" stroke="${color}" stroke-width="16" stroke-linecap="round"
+        stroke-dasharray="${circumference}" stroke-dashoffset="${dashOffset}" />
+      <text x="20" y="112" font-size="11" font-weight="700" fill="#8a97a0">E</text>
+      <text x="172" y="112" font-size="11" font-weight="700" fill="#8a97a0">F</text>
+      <text x="100" y="88" font-size="26" font-weight="800" fill="var(--navy)" text-anchor="middle">${pct}%</text>
+    </svg>
+  `;
+  document.getElementById('gaugeSvgHolder').innerHTML = svg;
+  document.getElementById('gaugeReadout').textContent = `${count} of ${goal} rentals this year`;
+}
+
+async function loadGauge() {
+  try {
+    const [jobsRes, settingsRes] = await Promise.all([
+      fetch('/api/jobs'),
+      fetch('/api/settings'),
+    ]);
+    const jobs = await jobsRes.json();
+    const settings = await settingsRes.json();
+    const yearStart = startOfYear(new Date());
+
+    const count = jobs.filter(j => {
+      if (j.type === 'delivery' || !j.dropoffCompleted) return false;
+      const d = j.dropoffActualDate || j.dropDate || j.createdAt;
+      return d && new Date(d) >= yearStart;
+    }).length;
+
+    renderGauge(count, settings.yearlyGoal || 750);
+  } catch (e) {
+    document.getElementById('gaugeReadout').textContent = 'Could not load goal progress.';
+  }
+}
+
+requireAuth(function (role) {
+  loadJobs(role);
+  loadGauge();
+});
 </script>
 
 </div>
