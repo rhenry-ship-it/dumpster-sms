@@ -540,7 +540,8 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
-async function loadJobs() {
+async function loadJobs(role = getRole()) {
+  const isDriver = role === 'driver';
   const listEl = document.getElementById('jobList');
   try {
     const res = await fetch('/api/jobs');
@@ -560,7 +561,7 @@ async function loadJobs() {
           ${j.type === 'delivery'
             ? `${j.material ? escapeHtml(j.material) + ' · ' : ''}${j.yards ? j.yards + ' YD · ' : ''}`
             : `${j.size ? escapeHtml(j.size) + ' · ' : ''}`
-          }${j.dropDate || ''}${j.pickupDate ? ' → ' + j.pickupDate : ''}${j.price ? ' · $' + j.price : ''}
+          }${j.dropDate || ''}${j.pickupDate ? ' → ' + j.pickupDate : ''}${(!isDriver && j.price) ? ' · $' + j.price : ''}
         </div>
         <div class="job-sent ${j.textResult?.sent ? 'ok' : 'err'}">
           ${j.textResult?.sent ? '✓ Texted crew' : '✗ Text not sent'}
@@ -569,7 +570,7 @@ async function loadJobs() {
           <button class="complete-btn ${j.completed ? 'done' : ''}" data-id="${j.id}" data-completed="${!!j.completed}">
             ${j.completed ? '✓ Completed' : 'Mark Complete'}
           </button>
-          <button class="delete-btn" data-id="${j.id}">Delete</button>
+          ${isDriver ? '' : `<button class="delete-btn" data-id="${j.id}">Delete</button>`}
         </div>
       </div>
     `).join('');
@@ -612,7 +613,7 @@ function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-requireAuth('admin', loadJobs);
+requireAuth(loadJobs);
 </script>
 
 </div>

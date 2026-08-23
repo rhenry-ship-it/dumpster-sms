@@ -323,7 +323,8 @@ function escapeHtml(s) {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-async function loadArchive() {
+async function loadArchive(role = getRole()) {
+  const isDriver = role === 'driver';
   const listEl = document.getElementById('archiveList');
   try {
     const res = await fetch('/api/jobs');
@@ -347,10 +348,10 @@ async function loadArchive() {
           ${j.type === 'delivery'
             ? `${j.material ? escapeHtml(j.material) + ' · ' : ''}${j.yards ? j.yards + ' YD · ' : ''}`
             : `${j.size ? escapeHtml(j.size) + ' · ' : ''}${j.dumpsterId ? '#' + escapeHtml(j.dumpsterId) + ' · ' : ''}`
-          }${j.dropDate || ''}${j.price ? ' · $' + j.price : ''}${j.pickupWeight ? ' · ' + j.pickupWeight + ' tons' : ''}${j.dumpCost ? ' · $' + j.dumpCost + ' dump fee' : ''}
+          }${j.dropDate || ''}${(!isDriver && j.price) ? ' · $' + j.price : ''}${(!isDriver && j.pickupWeight) ? ' · ' + j.pickupWeight + ' tons' : ''}${(!isDriver && j.dumpCost) ? ' · $' + j.dumpCost + ' dump fee' : ''}
         </div>
         <div class="job-actions">
-          <button class="delete-btn" data-id="${j.id}">Delete</button>
+          ${isDriver ? '' : `<button class="delete-btn" data-id="${j.id}">Delete</button>`}
         </div>
       </div>
     `).join('');
@@ -371,7 +372,7 @@ async function loadArchive() {
   }
 }
 
-requireAuth('admin', loadArchive);
+requireAuth(loadArchive);
 </script>
 
 </div>

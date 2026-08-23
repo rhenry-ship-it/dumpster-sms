@@ -302,6 +302,16 @@
 </div>
 <div class="content">
 
+<div class="nav-tabs">
+  <a href="index.html">New Job</a>
+  <a href="driver.html" class="active">Driver</a>
+  <a href="reports.html">All Jobs &amp; Totals</a>
+  <a href="archive.html">Archive</a>
+</div>
+<div class="nav-tabs">
+  <a href="stats.html">Statistics</a>
+</div>
+
 <div class="section-label">Drop-offs</div>
 <div id="dropoffList">Loading…</div>
 
@@ -495,7 +505,7 @@ function renderDelivery(j) {
   `;
 }
 
-requireAuth('driver', loadTasks);
+requireAuth(loadTasks);
 </script>
 
 </div>

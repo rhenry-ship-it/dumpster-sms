@@ -312,7 +312,7 @@
   <a href="stats.html">Statistics</a>
 </div>
 
-<a href="/api/export.xlsx" class="submit-btn" style="display:block; text-align:center; text-decoration:none; margin-bottom:20px;">📊 Export to Excel</a>
+<a href="/api/export.xlsx" id="exportBtn" class="submit-btn" style="display:block; text-align:center; text-decoration:none; margin-bottom:20px;">📊 Export to Excel</a>
 
 <div class="totals-grid" id="totalsGrid">
   <div class="total-card"><div class="value">—</div><div class="label">Total Jobs</div></div>
@@ -335,37 +335,49 @@ function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-async function loadAll() {
+async function loadAll(role = getRole()) {
+  const isDriver = role === 'driver';
   const pendingEl = document.getElementById('pendingList');
   const completedEl = document.getElementById('completedList');
   const gridEl = document.getElementById('totalsGrid');
+  const exportBtn = document.getElementById('exportBtn');
+  if (isDriver && exportBtn) exportBtn.style.display = 'none';
+
   try {
     const res = await fetch('/api/jobs');
     const jobs = await res.json();
 
     const totalJobs = jobs.length;
-    const dumpsterRevenue = jobs.filter(j => j.type !== 'delivery').reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
-    const materialRevenue = jobs.filter(j => j.type === 'delivery').reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
-    const totalDumpFees = jobs.reduce((s, j) => s + (parseFloat(j.dumpCost) || 0), 0);
     const rentals = jobs.filter(j => j.type !== 'delivery').length;
     const deliveries = jobs.filter(j => j.type === 'delivery').length;
 
-    gridEl.innerHTML = `
-      <div class="total-card"><div class="value">${totalJobs}</div><div class="label">Total Jobs</div></div>
-      <div class="total-card teal"><div class="value">$${dumpsterRevenue.toFixed(2)}</div><div class="label">Dumpster Revenue</div></div>
-      <div class="total-card teal"><div class="value">$${materialRevenue.toFixed(2)}</div><div class="label">Material Revenue</div></div>
-      <div class="total-card"><div class="value">$${totalDumpFees.toFixed(2)}</div><div class="label">Total Dump Fees</div></div>
-      <div class="total-card"><div class="value">${rentals}</div><div class="label">Rentals</div></div>
-      <div class="total-card"><div class="value">${deliveries}</div><div class="label">Deliveries</div></div>
-    `;
+    if (isDriver) {
+      gridEl.innerHTML = `
+        <div class="total-card"><div class="value">${totalJobs}</div><div class="label">Total Jobs</div></div>
+        <div class="total-card"><div class="value">${rentals}</div><div class="label">Rentals</div></div>
+        <div class="total-card"><div class="value">${deliveries}</div><div class="label">Deliveries</div></div>
+      `;
+    } else {
+      const dumpsterRevenue = jobs.filter(j => j.type !== 'delivery').reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
+      const materialRevenue = jobs.filter(j => j.type === 'delivery').reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
+      const totalDumpFees = jobs.reduce((s, j) => s + (parseFloat(j.dumpCost) || 0), 0);
+      gridEl.innerHTML = `
+        <div class="total-card"><div class="value">${totalJobs}</div><div class="label">Total Jobs</div></div>
+        <div class="total-card teal"><div class="value">$${dumpsterRevenue.toFixed(2)}</div><div class="label">Dumpster Revenue</div></div>
+        <div class="total-card teal"><div class="value">$${materialRevenue.toFixed(2)}</div><div class="label">Material Revenue</div></div>
+        <div class="total-card"><div class="value">$${totalDumpFees.toFixed(2)}</div><div class="label">Total Dump Fees</div></div>
+        <div class="total-card"><div class="value">${rentals}</div><div class="label">Rentals</div></div>
+        <div class="total-card"><div class="value">${deliveries}</div><div class="label">Deliveries</div></div>
+      `;
+    }
 
     const DAY_MS = 24 * 60 * 60 * 1000;
     const now = Date.now();
     const pending = jobs.filter(j => !j.completed);
     const completed = jobs.filter(j => j.completed && (!j.completedAt || (now - new Date(j.completedAt).getTime()) <= DAY_MS));
 
-    pendingEl.innerHTML = pending.length ? pending.map(renderJob).join('') : '<p style="color:#999">Nothing pending.</p>';
-    completedEl.innerHTML = completed.length ? completed.map(renderJob).join('') : '<p style="color:#999">No completed jobs yet.</p>';
+    pendingEl.innerHTML = pending.length ? pending.map(j => renderJob(j, isDriver)).join('') : '<p style="color:#999">Nothing pending.</p>';
+    completedEl.innerHTML = completed.length ? completed.map(j => renderJob(j, isDriver)).join('') : '<p style="color:#999">No completed jobs yet.</p>';
 
     document.querySelectorAll('.complete-btn').forEach(btn => {
       btn.addEventListener('click', () => toggleComplete(btn.dataset.id, btn.dataset.completed !== 'true'));
@@ -378,7 +390,7 @@ async function loadAll() {
   }
 }
 
-function renderJob(j) {
+function renderJob(j, isDriver) {
   const stageLabel = j.type === 'delivery'
     ? (j.completed ? 'Delivered' : 'Awaiting Delivery')
     : (!j.dropoffCompleted ? 'Awaiting Drop-off' : (!j.completed ? 'Awaiting Pickup' : 'Picked Up'));
@@ -393,7 +405,7 @@ function renderJob(j) {
         ${j.type === 'delivery'
           ? `${j.material ? escapeHtml(j.material) + ' · ' : ''}${j.yards ? j.yards + ' YD · ' : ''}`
           : `${j.size ? escapeHtml(j.size) + ' · ' : ''}${j.dumpsterId ? '#' + escapeHtml(j.dumpsterId) + ' · ' : ''}`
-        }${j.dropDate || ''}${j.pickupDate ? ' → ' + j.pickupDate : ''}${j.price ? ' · $' + j.price : ''}${j.pickupWeight ? ' · ' + j.pickupWeight + ' tons' : ''}
+        }${j.dropDate || ''}${j.pickupDate ? ' → ' + j.pickupDate : ''}${(!isDriver && j.price) ? ' · $' + j.price : ''}${(!isDriver && j.pickupWeight) ? ' · ' + j.pickupWeight + ' tons' : ''}
       </div>
       <div class="job-meta" style="font-weight:700;">${stageLabel}</div>
       <div class="job-sent ${j.textResult?.sent ? 'ok' : 'err'}">
@@ -403,7 +415,7 @@ function renderJob(j) {
         <button class="complete-btn ${j.completed ? 'done' : ''}" data-id="${j.id}" data-completed="${!!j.completed}">
           ${j.completed ? '✓ Completed' : 'Mark Complete'}
         </button>
-        <button class="delete-btn" data-id="${j.id}">Delete</button>
+        ${isDriver ? '' : `<button class="delete-btn" data-id="${j.id}">Delete</button>`}
       </div>
     </div>
   `;
@@ -432,7 +444,7 @@ async function deleteJob(id) {
   }
 }
 
-requireAuth('admin', loadAll);
+requireAuth(loadAll);
 </script>
 
 </div>
