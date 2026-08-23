@@ -196,6 +196,20 @@
     letter-spacing: 0.4px;
   }
   .total-card.teal .value { color: var(--teal-dark); }
+  #searchBarWrap { margin-bottom: 16px; }
+  #globalSearch {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1.5px solid var(--line);
+    border-radius: 11px;
+    font-size: 15px;
+    font-family: inherit;
+    background: white;
+  }
+  #globalSearch:focus {
+    outline: none;
+    border-color: var(--teal);
+  }
   .type-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
   .type-toggle button {
     flex: 1;
@@ -393,9 +407,11 @@
     <p style="font-size:12px; color:#667680; margin-top:8px;">
       Looks for columns named something like: Dumpster ID, Customer, Address, Size, Drop-off Date.
       Column names don't need to match exactly — just contain those words.
+      Re-uploading updates existing entries (matched by Dumpster ID) instead of duplicating them.
     </p>
     <div id="importStatus" style="margin-top:8px; font-size:13px; font-weight:600;"></div>
   </form>
+  <button id="clearImportsBtn" type="button" style="width:100%; margin-top:10px; padding:10px; border-radius:10px; border:1.5px solid var(--err); background:white; color:var(--err); font-weight:700; font-family:inherit; cursor:pointer;">Clear All Imported Assets</button>
 </div>
 
 <h2>Currently On Site (oldest first)</h2>
@@ -476,6 +492,7 @@ requireAuth(function (role) {
 function setupImport() {
   const fileInput = document.getElementById('importFile');
   const statusEl = document.getElementById('importStatus');
+  const clearBtn = document.getElementById('clearImportsBtn');
 
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -506,13 +523,27 @@ function setupImport() {
       });
       const result = await res.json();
       statusEl.style.color = 'var(--ok)';
-      statusEl.textContent = `✅ Imported ${result.count} asset(s).`;
+      statusEl.textContent = `✅ ${result.created} new, ${result.updated} updated.`;
       loadAssets();
     } catch (err) {
       statusEl.style.color = 'var(--err)';
       statusEl.textContent = 'Could not read that file — make sure it is a valid .xlsx.';
     }
     fileInput.value = '';
+  });
+
+  clearBtn.addEventListener('click', async () => {
+    if (!confirm('Remove every asset that came from a spreadsheet import? Manually-created jobs are not affected.')) return;
+    try {
+      const res = await fetch('/api/import-assets', { method: 'DELETE' });
+      const result = await res.json();
+      statusEl.style.color = 'var(--ok)';
+      statusEl.textContent = `Removed ${result.removed} imported asset(s).`;
+      loadAssets();
+    } catch (e) {
+      statusEl.style.color = 'var(--err)';
+      statusEl.textContent = 'Could not clear imported assets.';
+    }
   });
 }
 

@@ -17,10 +17,31 @@ function injectTopBar() {
   });
 }
 
+function injectSearchBar() {
+  if (document.getElementById('globalSearch')) return;
+  const navTabsGroups = document.querySelectorAll('.content .nav-tabs');
+  if (navTabsGroups.length === 0) return;
+  const lastNav = navTabsGroups[navTabsGroups.length - 1];
+
+  const wrap = document.createElement('div');
+  wrap.id = 'searchBarWrap';
+  wrap.innerHTML = `<input type="text" id="globalSearch" placeholder="🔍 Search customer, address, dumpster ID…" autocomplete="off" />`;
+  lastNav.insertAdjacentElement('afterend', wrap);
+
+  document.getElementById('globalSearch').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('.job, .aging-row').forEach((card) => {
+      const text = card.textContent.toLowerCase();
+      card.style.display = (!q || text.includes(q)) ? '' : 'none';
+    });
+  });
+}
+
 function requireAuth(onSuccess) {
   const role = getRole();
   if (role) {
     injectTopBar();
+    injectSearchBar();
     onSuccess(role);
     return;
   }
@@ -59,6 +80,7 @@ function requireAuth(onSuccess) {
         localStorage.setItem('op_role', data.role);
         overlay.remove();
         injectTopBar();
+        injectSearchBar();
         onSuccess(data.role);
       } else {
         errEl.textContent = 'Incorrect PIN';
