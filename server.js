@@ -194,6 +194,7 @@ app.post('/api/jobs', async (req, res) => {
       dumpsterId: '',
       dropoffCompleted: isDelivery ? true : false,
       dropoffTime: '',
+      dropoffActualDate: '',
       completed: false,
       completedAt: '',
       pickupWeight: '',
@@ -256,6 +257,9 @@ app.patch('/api/jobs/:id', (req, res) => {
   }
   if (typeof req.body.dropoffCompleted === 'boolean') {
     job.dropoffCompleted = req.body.dropoffCompleted;
+    if (req.body.dropoffCompleted) {
+      job.dropoffActualDate = new Date().toISOString().slice(0, 10);
+    }
   }
   if (req.body.dropoffTime !== undefined) {
     job.dropoffTime = req.body.dropoffTime;
@@ -281,6 +285,7 @@ app.get('/api/export.xlsx', async (req, res) => {
     { header: 'Material', key: 'material', width: 12 },
     { header: 'Yards', key: 'yards', width: 8 },
     { header: 'Drop-off Date', key: 'dropDate', width: 14 },
+    { header: 'Actual Drop-off Date', key: 'dropoffActualDate', width: 18 },
     { header: 'Drop-off Time', key: 'dropoffTime', width: 14 },
     { header: 'Scheduled Pickup', key: 'pickupDate', width: 16 },
     { header: 'Actual Pickup Date', key: 'actualPickupDate', width: 16 },
@@ -305,6 +310,7 @@ app.get('/api/export.xlsx', async (req, res) => {
       material: j.material || '',
       yards: j.yards || '',
       dropDate: j.dropDate || '',
+      dropoffActualDate: j.dropoffActualDate || '',
       dropoffTime: j.dropoffTime || '',
       pickupDate: j.pickupDate || '',
       actualPickupDate: j.actualPickupDate || '',
