@@ -131,13 +131,21 @@ async function sendGroupEmail(message, job) {
 
 // ---- routes ----
 app.post('/api/verify-pin', (req, res) => {
-  const { role, pin } = req.body;
-  const expected = role === 'driver' ? process.env.DRIVER_PIN : process.env.ADMIN_PIN;
-  if (!expected) {
-    // If no PIN is configured for this role, leave it open rather than lock everyone out
-    return res.json({ ok: true });
+  const { pin } = req.body;
+  const adminPin = process.env.ADMIN_PIN;
+  const driverPin = process.env.DRIVER_PIN;
+
+  if (!adminPin && !driverPin) {
+    // Nothing configured yet — don't lock anyone out, just default to admin access
+    return res.json({ ok: true, role: 'admin' });
   }
-  res.json({ ok: pin === expected });
+  if (adminPin && pin === adminPin) {
+    return res.json({ ok: true, role: 'admin' });
+  }
+  if (driverPin && pin === driverPin) {
+    return res.json({ ok: true, role: 'driver' });
+  }
+  res.json({ ok: false });
 });
 
 app.get('/api/jobs', (req, res) => {

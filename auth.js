@@ -1,7 +1,11 @@
-function requireAuth(role, onSuccess) {
-  const key = role + '_authed';
-  if (localStorage.getItem(key) === 'true') {
-    onSuccess();
+function getRole() {
+  return localStorage.getItem('op_role') || '';
+}
+
+function requireAuth(onSuccess) {
+  const role = getRole();
+  if (role) {
+    onSuccess(role);
     return;
   }
 
@@ -32,13 +36,13 @@ function requireAuth(role, onSuccess) {
       const res = await fetch('/api/verify-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, pin }),
+        body: JSON.stringify({ pin }),
       });
       const data = await res.json();
       if (data.ok) {
-        localStorage.setItem(key, 'true');
+        localStorage.setItem('op_role', data.role);
         overlay.remove();
-        onSuccess();
+        onSuccess(data.role);
       } else {
         errEl.textContent = 'Incorrect PIN';
         document.getElementById('authPin').value = '';
