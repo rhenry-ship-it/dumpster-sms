@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const twilio = require('twilio');
+const ExcelJS = require('exceljs');
 
 const app = express();
 app.use(express.json());
@@ -173,6 +174,10 @@ app.post('/api/jobs', async (req, res) => {
       notes: notes || '',
       tripLabel: tripsNeeded > 1 ? `Trip ${i + 1} of ${tripsNeeded}` : '',
       completed: false,
+      completedAt: '',
+      pickupWeight: '',
+      dumpCost: '',
+      actualPickupDate: '',
       createdAt: new Date().toISOString(),
     };
 
@@ -214,9 +219,74 @@ app.patch('/api/jobs/:id', (req, res) => {
   }
   if (typeof req.body.completed === 'boolean') {
     job.completed = req.body.completed;
+    job.completedAt = req.body.completed ? new Date().toISOString() : '';
+  }
+  if (req.body.pickupWeight !== undefined) {
+    job.pickupWeight = req.body.pickupWeight;
+  }
+  if (req.body.dumpCost !== undefined) {
+    job.dumpCost = req.body.dumpCost;
+  }
+  if (req.body.actualPickupDate !== undefined) {
+    job.actualPickupDate = req.body.actualPickupDate;
   }
   saveJobs(jobs);
   res.json({ job });
+});
+
+app.get('/api/export.xlsx', async (req, res) => {
+  const jobs = loadJobs().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Jobs');
+
+  sheet.columns = [
+    { header: 'Date Logged', key: 'createdAt', width: 18 },
+    { header: 'Type', key: 'type', width: 10 },
+    { header: 'Trip', key: 'tripLabel', width: 14 },
+    { header: 'Customer', key: 'customer', width: 22 },
+    { header: 'Address', key: 'address', width: 36 },
+    { header: 'Size', key: 'size', width: 10 },
+    { header: 'Material', key: 'material', width: 12 },
+    { header: 'Yards', key: 'yards', width: 8 },
+    { header: 'Drop-off Date', key: 'dropDate', width: 14 },
+    { header: 'Scheduled Pickup', key: 'pickupDate', width: 16 },
+    { header: 'Actual Pickup Date', key: 'actualPickupDate', width: 16 },
+    { header: 'Price', key: 'price', width: 10 },
+    { header: 'Pickup Weight (tons)', key: 'pickupWeight', width: 18 },
+    { header: 'Dump Cost', key: 'dumpCost', width: 12 },
+    { header: 'Completed', key: 'completed', width: 12 },
+    { header: 'Instructions', key: 'notes', width: 30 },
+    { header: 'Crew Texted', key: 'textSent', width: 12 },
+  ];
+  sheet.getRow(1).font = { bold: true };
+
+  jobs.forEach(j => {
+    sheet.addRow({
+      createdAt: j.createdAt ? new Date(j.createdAt).toLocaleString() : '',
+      type: j.type === 'delivery' ? 'Delivery' : 'Rental',
+      tripLabel: j.tripLabel || '',
+      customer: j.customer || '',
+      address: j.address || '',
+      size: j.size || '',
+      material: j.material || '',
+      yards: j.yards || '',
+      dropDate: j.dropDate || '',
+      pickupDate: j.pickupDate || '',
+      actualPickupDate: j.actualPickupDate || '',
+      price: j.price ? Number(j.price) : '',
+      pickupWeight: j.pickupWeight ? Number(j.pickupWeight) : '',
+      dumpCost: j.dumpCost ? Number(j.dumpCost) : '',
+      completed: j.completed ? 'Yes' : 'No',
+      notes: j.notes || '',
+      textSent: j.textResult?.sent ? 'Yes' : 'No',
+    });
+  });
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="job-log-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+  await workbook.xlsx.write(res);
+  res.end();
 });
 
 app.delete('/api/jobs/:id', (req, res) => {
