@@ -351,41 +351,82 @@ app.post('/api/import-assets', (req, res) => {
   }
 
   const jobs = loadJobs();
-  let count = 0;
+  let created = 0;
+  let updated = 0;
+  const today = new Date().toISOString().slice(0, 10);
 
   assets.forEach((a, i) => {
     if (!a.address) return;
-    const today = new Date().toISOString().slice(0, 10);
-    jobs.push({
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + '-imp' + i,
-      type: 'rental',
-      customer: a.customer || 'Imported',
-      address: a.address,
-      size: a.size || '',
-      material: '',
-      yards: null,
-      dropDate: a.dropoffActualDate || '',
-      pickupDate: '',
-      price: '',
-      notes: 'Imported from spreadsheet',
-      tripLabel: '',
-      dumpsterId: a.dumpsterId || '',
-      dropoffCompleted: true,
-      dropoffTime: '',
-      dropoffActualDate: a.dropoffActualDate || today,
-      completed: false,
-      completedAt: '',
-      pickupWeight: '',
-      dumpCost: '',
-      actualPickupDate: '',
-      textResult: { sent: false, reason: 'Imported record — no text sent' },
-      createdAt: new Date().toISOString(),
-    });
-    count++;
+
+    let existing = null;
+    if (a.dumpsterId) {
+      existing = jobs.find(j =>
+        j.type === 'rental' &&
+        j.dumpsterId &&
+        j.dumpsterId.toLowerCase() === a.dumpsterId.toLowerCase() &&
+        !j.completed
+      );
+    }
+    if (!existing) {
+      existing = jobs.find(j =>
+        j.type === 'rental' &&
+        !j.completed &&
+        j.address.toLowerCase() === a.address.toLowerCase() &&
+        (a.customer ? (j.customer || '').toLowerCase() === a.customer.toLowerCase() : true)
+      );
+    }
+
+    if (existing) {
+      existing.customer = a.customer || existing.customer;
+      existing.address = a.address;
+      existing.size = a.size || existing.size;
+      existing.dumpsterId = a.dumpsterId || existing.dumpsterId;
+      if (a.dropoffActualDate) {
+        existing.dropoffActualDate = a.dropoffActualDate;
+        existing.dropDate = a.dropoffActualDate;
+      }
+      existing.dropoffCompleted = true;
+      updated++;
+    } else {
+      jobs.push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + '-imp' + i,
+        type: 'rental',
+        customer: a.customer || 'Imported',
+        address: a.address,
+        size: a.size || '',
+        material: '',
+        yards: null,
+        dropDate: a.dropoffActualDate || '',
+        pickupDate: '',
+        price: '',
+        notes: 'Imported from spreadsheet',
+        tripLabel: '',
+        dumpsterId: a.dumpsterId || '',
+        dropoffCompleted: true,
+        dropoffTime: '',
+        dropoffActualDate: a.dropoffActualDate || today,
+        completed: false,
+        completedAt: '',
+        pickupWeight: '',
+        dumpCost: '',
+        actualPickupDate: '',
+        textResult: { sent: false, reason: 'Imported record — no text sent' },
+        createdAt: new Date().toISOString(),
+      });
+      created++;
+    }
   });
 
   saveJobs(jobs);
-  res.json({ count });
+  res.json({ created, updated, count: created + updated });
+});
+
+app.delete('/api/import-assets', (req, res) => {
+  const jobs = loadJobs();
+  const remaining = jobs.filter(j => j.notes !== 'Imported from spreadsheet');
+  const removed = jobs.length - remaining.length;
+  saveJobs(remaining);
+  res.json({ removed });
 });
 
 app.delete('/api/jobs/:id', (req, res) => {
