@@ -130,6 +130,16 @@ async function sendGroupEmail(message, job) {
 }
 
 // ---- routes ----
+app.post('/api/verify-pin', (req, res) => {
+  const { role, pin } = req.body;
+  const expected = role === 'driver' ? process.env.DRIVER_PIN : process.env.ADMIN_PIN;
+  if (!expected) {
+    // If no PIN is configured for this role, leave it open rather than lock everyone out
+    return res.json({ ok: true });
+  }
+  res.json({ ok: pin === expected });
+});
+
 app.get('/api/jobs', (req, res) => {
   const jobs = loadJobs().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   res.json(jobs);
@@ -173,6 +183,9 @@ app.post('/api/jobs', async (req, res) => {
       price: i === 0 ? (price || '') : '',
       notes: notes || '',
       tripLabel: tripsNeeded > 1 ? `Trip ${i + 1} of ${tripsNeeded}` : '',
+      dumpsterId: '',
+      dropoffCompleted: isDelivery ? true : false,
+      dropoffTime: '',
       completed: false,
       completedAt: '',
       pickupWeight: '',
@@ -230,6 +243,15 @@ app.patch('/api/jobs/:id', (req, res) => {
   if (req.body.actualPickupDate !== undefined) {
     job.actualPickupDate = req.body.actualPickupDate;
   }
+  if (req.body.dumpsterId !== undefined) {
+    job.dumpsterId = req.body.dumpsterId;
+  }
+  if (typeof req.body.dropoffCompleted === 'boolean') {
+    job.dropoffCompleted = req.body.dropoffCompleted;
+  }
+  if (req.body.dropoffTime !== undefined) {
+    job.dropoffTime = req.body.dropoffTime;
+  }
   saveJobs(jobs);
   res.json({ job });
 });
@@ -247,9 +269,11 @@ app.get('/api/export.xlsx', async (req, res) => {
     { header: 'Customer', key: 'customer', width: 22 },
     { header: 'Address', key: 'address', width: 36 },
     { header: 'Size', key: 'size', width: 10 },
+    { header: 'Dumpster ID', key: 'dumpsterId', width: 14 },
     { header: 'Material', key: 'material', width: 12 },
     { header: 'Yards', key: 'yards', width: 8 },
     { header: 'Drop-off Date', key: 'dropDate', width: 14 },
+    { header: 'Drop-off Time', key: 'dropoffTime', width: 14 },
     { header: 'Scheduled Pickup', key: 'pickupDate', width: 16 },
     { header: 'Actual Pickup Date', key: 'actualPickupDate', width: 16 },
     { header: 'Price', key: 'price', width: 10 },
@@ -269,9 +293,11 @@ app.get('/api/export.xlsx', async (req, res) => {
       customer: j.customer || '',
       address: j.address || '',
       size: j.size || '',
+      dumpsterId: j.dumpsterId || '',
       material: j.material || '',
       yards: j.yards || '',
       dropDate: j.dropDate || '',
+      dropoffTime: j.dropoffTime || '',
       pickupDate: j.pickupDate || '',
       actualPickupDate: j.actualPickupDate || '',
       price: j.price ? Number(j.price) : '',
@@ -282,6 +308,21 @@ app.get('/api/export.xlsx', async (req, res) => {
       textSent: j.textResult?.sent ? 'Yes' : 'No',
     });
   });
+
+  const dumpsterRevenue = jobs.filter(j => j.type !== 'delivery').reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
+  const materialRevenue = jobs.filter(j => j.type === 'delivery').reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
+  const totalDumpFees = jobs.reduce((s, j) => s + (parseFloat(j.dumpCost) || 0), 0);
+
+  const summarySheet = workbook.addWorksheet('Summary');
+  summarySheet.columns = [
+    { header: 'Metric', key: 'metric', width: 28 },
+    { header: 'Value', key: 'value', width: 16 },
+  ];
+  summarySheet.getRow(1).font = { bold: true };
+  summarySheet.addRow({ metric: 'Dumpster Revenue', value: dumpsterRevenue });
+  summarySheet.addRow({ metric: 'Material Delivery Revenue', value: materialRevenue });
+  summarySheet.addRow({ metric: 'Total Dump Fees Paid', value: totalDumpFees });
+  summarySheet.addRow({ metric: 'Net (Revenue - Dump Fees)', value: dumpsterRevenue + materialRevenue - totalDumpFees });
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="job-log-${new Date().toISOString().slice(0, 10)}.xlsx"`);
