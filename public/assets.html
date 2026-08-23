@@ -485,7 +485,7 @@ function setupImport() {
 
     try {
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: 'array' });
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
@@ -520,16 +520,29 @@ function normalizeRow(row) {
   const get = (aliases) => {
     for (const key of Object.keys(row)) {
       const k = key.toLowerCase().trim();
-      if (aliases.some(a => k.includes(a))) return String(row[key]).trim();
+      if (aliases.some(a => k.includes(a))) return row[key];
     }
     return '';
   };
+
+  function toIsoDate(val) {
+    if (!val) return '';
+    if (val instanceof Date && !isNaN(val.getTime())) {
+      return val.toISOString().slice(0, 10);
+    }
+    const parsed = new Date(val);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
+    return String(val).trim();
+  }
+
   return {
-    dumpsterId: get(['dumpster id', 'dumpster', 'asset id', 'unit id', 'id']),
-    customer: get(['customer', 'client', 'name']),
-    address: get(['address', 'location', 'site']),
-    size: get(['size', 'yard', 'yd']),
-    dropoffActualDate: get(['drop off date', 'dropoff date', 'date dropped', 'date', 'start date']),
+    dumpsterId: String(get(['dumpster id', 'dumpster', 'asset id', 'unit id', 'id']) || '').trim(),
+    customer: String(get(['customer', 'client', 'name']) || '').trim(),
+    address: String(get(['address', 'location', 'site']) || '').trim(),
+    size: String(get(['size', 'yard', 'yd']) || '').trim(),
+    dropoffActualDate: toIsoDate(get(['drop off date', 'dropoff date', 'date dropped', 'date', 'start date'])),
   };
 }
 </script>
