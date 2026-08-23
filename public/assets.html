@@ -506,16 +506,20 @@ function setupImport() {
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
-      const assets = rows.map(normalizeRow).filter(a => a.address && a.dumpsterId);
+      const parsed = rows.map(normalizeRow);
+      const skippedPickedUp = parsed.filter(a => a.address && a.dumpsterId && a.pickedUp).length;
+      const assets = parsed.filter(a => a.address && a.dumpsterId && !a.pickedUp);
 
       if (assets.length === 0) {
         statusEl.style.color = 'var(--err)';
-        statusEl.textContent = 'No usable rows found — check for Dumpster ID and Address columns.';
+        statusEl.textContent = skippedPickedUp > 0
+          ? `All ${skippedPickedUp} matching row(s) already show a pickup date — nothing currently active to import.`
+          : 'No usable rows found — check for Dumpster ID and Address columns.';
         fileInput.value = '';
         return;
       }
 
-      statusEl.textContent = `Importing ${assets.length} asset(s)…`;
+      statusEl.textContent = `Importing ${assets.length} active asset(s)${skippedPickedUp > 0 ? ` (skipped ${skippedPickedUp} already picked up)` : ''}…`;
       const res = await fetch('/api/import-assets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -569,11 +573,13 @@ function normalizeRow(row) {
   }
 
   return {
-    dumpsterId: String(get(['dumpster id', 'dumpster', 'asset id', 'unit id', 'id']) || '').trim(),
+    dumpsterId: String(get(['dumpster id', 'dumpster', 'can#', 'can', 'asset id', 'unit id', 'id']) || '').trim(),
     customer: String(get(['customer', 'client', 'name']) || '').trim(),
     address: String(get(['address', 'location', 'site']) || '').trim(),
     size: String(get(['size', 'yard', 'yd']) || '').trim(),
-    dropoffActualDate: toIsoDate(get(['drop off date', 'dropoff date', 'date dropped', 'date', 'start date'])),
+    price: String(get(['price', 'rate', 'amount']) || '').trim(),
+    dropoffActualDate: toIsoDate(get(['drop off date', 'dropoff date', 'dropped off', 'drop off', 'date dropped', 'date', 'start date'])),
+    pickedUp: toIsoDate(get(['picked up', 'pickup date', 'date picked up', 'pickup'])),
   };
 }
 </script>
