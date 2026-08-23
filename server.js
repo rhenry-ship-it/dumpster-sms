@@ -344,6 +344,50 @@ app.get('/api/export.xlsx', async (req, res) => {
   res.end();
 });
 
+app.post('/api/import-assets', (req, res) => {
+  const { assets } = req.body;
+  if (!Array.isArray(assets)) {
+    return res.status(400).json({ error: 'assets array required' });
+  }
+
+  const jobs = loadJobs();
+  let count = 0;
+
+  assets.forEach((a, i) => {
+    if (!a.address) return;
+    const today = new Date().toISOString().slice(0, 10);
+    jobs.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + '-imp' + i,
+      type: 'rental',
+      customer: a.customer || 'Imported',
+      address: a.address,
+      size: a.size || '',
+      material: '',
+      yards: null,
+      dropDate: a.dropoffActualDate || '',
+      pickupDate: '',
+      price: '',
+      notes: 'Imported from spreadsheet',
+      tripLabel: '',
+      dumpsterId: a.dumpsterId || '',
+      dropoffCompleted: true,
+      dropoffTime: '',
+      dropoffActualDate: a.dropoffActualDate || today,
+      completed: false,
+      completedAt: '',
+      pickupWeight: '',
+      dumpCost: '',
+      actualPickupDate: '',
+      textResult: { sent: false, reason: 'Imported record — no text sent' },
+      createdAt: new Date().toISOString(),
+    });
+    count++;
+  });
+
+  saveJobs(jobs);
+  res.json({ count });
+});
+
 app.delete('/api/jobs/:id', (req, res) => {
   const jobs = loadJobs().filter(j => j.id !== req.params.id);
   saveJobs(jobs);
