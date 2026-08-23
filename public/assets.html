@@ -504,7 +504,19 @@ function setupImport() {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      let headerRowIndex = raw.findIndex(r =>
+        r.filter(c => c !== '' && c !== null && c !== undefined).length >= 2
+      );
+      if (headerRowIndex === -1) headerRowIndex = 0;
+      const headers = raw[headerRowIndex].map(h => String(h || '').trim());
+      const rows = raw.slice(headerRowIndex + 1)
+        .filter(r => r.some(c => c !== '' && c !== null && c !== undefined))
+        .map(r => {
+          const obj = {};
+          headers.forEach((h, i) => { obj[h || `col${i}`] = r[i]; });
+          return obj;
+        });
 
       const parsed = rows.map(normalizeRow);
       const skippedPickedUp = parsed.filter(a => a.address && a.dumpsterId && a.pickedUp).length;
@@ -572,12 +584,26 @@ function normalizeRow(row) {
     return String(val).trim();
   }
 
+  function inferSizeFromId(id) {
+    const digits = (id || '').replace(/\D/g, '');
+    if (digits.startsWith('15')) return '15 YD';
+    if (digits.startsWith('10')) return '10 YD';
+    return '';
+  }
+
+  const dumpsterId = String(get(['dumpster id', 'dumpster', 'can#', 'can', 'asset id', 'unit id', 'id']) || '').trim();
+  let size = String(get(['size', 'yard', 'yd']) || '').trim();
+  if (!size) size = inferSizeFromId(dumpsterId);
+
+  let price = String(get(['price', 'rate', 'amount']) || '').trim();
+  if (!price && size.includes('15')) price = '425';
+
   return {
-    dumpsterId: String(get(['dumpster id', 'dumpster', 'can#', 'can', 'asset id', 'unit id', 'id']) || '').trim(),
+    dumpsterId,
     customer: String(get(['customer', 'client', 'name']) || '').trim(),
     address: String(get(['address', 'location', 'site']) || '').trim(),
-    size: String(get(['size', 'yard', 'yd']) || '').trim(),
-    price: String(get(['price', 'rate', 'amount']) || '').trim(),
+    size,
+    price,
     dropoffActualDate: toIsoDate(get(['drop off date', 'dropoff date', 'dropped off', 'drop off', 'date dropped', 'date', 'start date'])),
     pickedUp: toIsoDate(get(['picked up', 'pickup date', 'date picked up', 'pickup'])),
   };
