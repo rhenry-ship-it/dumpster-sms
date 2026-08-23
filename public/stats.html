@@ -442,15 +442,22 @@ function setupHistoryImport() {
       );
       if (headerRowIndex === -1) headerRowIndex = 0;
       const headers = raw[headerRowIndex].map(h => String(h || '').trim());
+      const headerLower = headers.map(h => h.toLowerCase().trim());
       const rows = raw.slice(headerRowIndex + 1)
         .filter(r => r.some(c => c !== '' && c !== null && c !== undefined))
+        .filter(r => {
+          // Skip rows that are actually a repeated header line pasted mid-sheet
+          const rowLower = r.map(c => String(c || '').toLowerCase().trim());
+          const matchCount = headerLower.filter((h, i) => h && rowLower[i] === h).length;
+          return matchCount < 3;
+        })
         .map(r => {
           const obj = {};
           headers.forEach((h, i) => { obj[h || `col${i}`] = r[i]; });
           return obj;
         });
 
-      const assets = rows.map(normalizeHistoryRow).filter(a => a.address && a.dumpsterId);
+      const assets = rows.map(normalizeHistoryRow).filter(a => a.address);
 
       if (assets.length === 0) {
         statusEl.style.color = 'var(--err)';
