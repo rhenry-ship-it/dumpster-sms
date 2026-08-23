@@ -279,6 +279,9 @@ app.patch('/api/jobs/:id', (req, res) => {
   if (req.body.size !== undefined) {
     job.size = req.body.size;
   }
+  if (req.body.material !== undefined) {
+    job.material = req.body.material;
+  }
   if (req.body.price !== undefined) {
     job.price = req.body.price;
   }
@@ -432,6 +435,7 @@ app.post('/api/import-assets', (req, res) => {
         existing.size = a.size || existing.size;
         existing.dumpsterId = a.dumpsterId || existing.dumpsterId;
         if (a.price) existing.price = a.price;
+        if (a.dumpCost) existing.dumpCost = a.dumpCost;
         if (a.dropoffActualDate) {
           existing.dropoffActualDate = a.dropoffActualDate;
           existing.dropDate = a.dropoffActualDate;
@@ -465,7 +469,7 @@ app.post('/api/import-assets', (req, res) => {
           completed: isCompleted,
           completedAt: isCompleted ? safeIsoDateTime(a.pickedUp) : '',
           pickupWeight: isCompleted ? (a.weight || '') : '',
-          dumpCost: '',
+          dumpCost: a.dumpCost || '',
           actualPickupDate: isCompleted ? a.pickedUp : '',
           textResult: { sent: false, reason: 'Imported record — no text sent' },
           createdAt: new Date().toISOString(),
