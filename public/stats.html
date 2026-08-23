@@ -381,6 +381,21 @@
 <div class="section-label">This Year</div>
 <div class="totals-grid" id="yearGrid"></div>
 
+<div id="historyImportSection" style="display:none;">
+  <div class="section-label">Import Full Job History (Year-to-Date)</div>
+  <form id="historyImportForm">
+    <label>Upload your full billing/tracking spreadsheet (.xlsx)</label>
+    <input type="file" id="historyImportFile" accept=".xlsx,.xls" />
+    <p style="font-size:12px; color:#667680; margin-top:8px;">
+      Imports every row — completed and paid included — so these stats reflect your true history.
+      Recognizes columns like Dumpster ID/Can#, Customer, Address/Location, Weight, Price,
+      Drop-off Date, and Picked Up date. Safe to re-upload; matching rows update instead of duplicating.
+    </p>
+    <div id="historyImportStatus" style="margin-top:8px; font-size:13px; font-weight:600;"></div>
+  </form>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="auth.js"></script>
 <script>
 function startOfWeek(d) {
@@ -392,6 +407,107 @@ function startOfWeek(d) {
 function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
 function startOfQuarter(d) { const q = Math.floor(d.getMonth() / 3); return new Date(d.getFullYear(), q * 3, 1); }
 function startOfYear(d) { return new Date(d.getFullYear(), 0, 1); }
+
+function setupHistoryImport() {
+  const fileInput = document.getElementById('historyImportFile');
+  const statusEl = document.getElementById('historyImportStatus');
+
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    statusEl.style.color = 'var(--ink)';
+    statusEl.textContent = 'Reading file…';
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      let headerRowIndex = raw.findIndex(r =>
+        r.filter(c => c !== '' && c !== null && c !== undefined).length >= 2
+      );
+      if (headerRowIndex === -1) headerRowIndex = 0;
+      const headers = raw[headerRowIndex].map(h => String(h || '').trim());
+      const rows = raw.slice(headerRowIndex + 1)
+        .filter(r => r.some(c => c !== '' && c !== null && c !== undefined))
+        .map(r => {
+          const obj = {};
+          headers.forEach((h, i) => { obj[h || `col${i}`] = r[i]; });
+          return obj;
+        });
+
+      const assets = rows.map(normalizeHistoryRow).filter(a => a.address && a.dumpsterId);
+
+      if (assets.length === 0) {
+        statusEl.style.color = 'var(--err)';
+        statusEl.textContent = 'No usable rows found — check for Dumpster ID and Address columns.';
+        fileInput.value = '';
+        return;
+      }
+
+      const completedCount = assets.filter(a => a.pickedUp).length;
+      statusEl.textContent = `Importing ${assets.length} row(s) (${completedCount} already picked up)…`;
+
+      const res = await fetch('/api/import-assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assets, mode: 'history' }),
+      });
+      const result = await res.json();
+      statusEl.style.color = 'var(--ok)';
+      statusEl.textContent = `✅ ${result.created} new, ${result.updated} updated.`;
+      loadStats();
+    } catch (err) {
+      statusEl.style.color = 'var(--err)';
+      statusEl.textContent = 'Could not read that file — make sure it is a valid .xlsx.';
+    }
+    fileInput.value = '';
+  });
+}
+
+function inferSizeFromId(id) {
+  const digits = (id || '').replace(/\D/g, '');
+  if (digits.startsWith('15')) return '15 YD';
+  if (digits.startsWith('10')) return '10 YD';
+  return '';
+}
+
+function toIsoDate(val) {
+  if (!val) return '';
+  if (val instanceof Date && !isNaN(val.getTime())) return val.toISOString().slice(0, 10);
+  const parsed = new Date(val);
+  if (!isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return String(val).trim();
+}
+
+function normalizeHistoryRow(row) {
+  const get = (aliases) => {
+    for (const key of Object.keys(row)) {
+      const k = key.toLowerCase().trim();
+      if (aliases.some(a => k.includes(a))) return row[key];
+    }
+    return '';
+  };
+
+  const dumpsterId = String(get(['dumpster id', 'dumpster', 'can#', 'can', 'asset id', 'unit id', 'id']) || '').trim();
+  let size = String(get(['size', 'yard', 'yd']) || '').trim();
+  if (!size) size = inferSizeFromId(dumpsterId);
+
+  let price = String(get(['price', 'rate', 'amount']) || '').trim();
+  if (!price && size.includes('15')) price = '425';
+  if (!price && size.includes('10')) price = '375';
+
+  return {
+    dumpsterId,
+    customer: String(get(['customer', 'client', 'name']) || '').trim(),
+    address: String(get(['address', 'location', 'site']) || '').trim(),
+    size,
+    price,
+    weight: String(get(['weight', 'tons', 'tonnage']) || '').trim(),
+    dropoffActualDate: toIsoDate(get(['drop off date', 'dropoff date', 'dropped off', 'drop off', 'date dropped', 'date', 'start date'])),
+    pickedUp: toIsoDate(get(['picked up', 'pickup date', 'date picked up', 'pickup'])),
+  };
+}
 
 function countInPeriod(jobs, periodStart) {
   const dropped = jobs.filter(j => j.type !== 'delivery' && j.dropoffCompleted && j.dropoffDate_computed && j.dropoffDate_computed >= periodStart).length;
@@ -415,7 +531,9 @@ async function loadStats() {
     // Drop-off events are dated by createdAt (the day the drop-off slip was logged),
     // since dropoffTime only stores a clock time, not a date.
     jobs.forEach(j => {
-      j.dropoffDate_computed = j.dropoffCompleted && j.createdAt ? new Date(j.createdAt) : null;
+      j.dropoffDate_computed = j.dropoffCompleted && (j.dropoffActualDate || j.dropDate)
+        ? new Date(j.dropoffActualDate || j.dropDate)
+        : (j.dropoffCompleted && j.createdAt ? new Date(j.createdAt) : null);
     });
 
     renderGrid('weekGrid', countInPeriod(jobs, startOfWeek(now)));
@@ -427,7 +545,13 @@ async function loadStats() {
   }
 }
 
-requireAuth(loadStats);
+requireAuth(function (role) {
+  if (role === 'admin') {
+    document.getElementById('historyImportSection').style.display = 'block';
+    setupHistoryImport();
+  }
+  loadStats();
+});
 </script>
 
 </div>
