@@ -432,11 +432,16 @@ async function loadAll(role = getRole()) {
       const dumpsterRevenue = jobs.filter(j => j.type !== 'delivery').reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
       const materialRevenue = jobs.filter(j => j.type === 'delivery').reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
       const totalDumpFees = jobs.reduce((s, j) => s + (parseFloat(j.dumpCost) || 0), 0);
+      const totalRevenue = dumpsterRevenue + materialRevenue;
+      const grossProfit = totalRevenue - totalDumpFees;
+      const dumpRatio = totalRevenue > 0 ? (totalDumpFees / totalRevenue) * 100 : 0;
       gridEl.innerHTML = `
         <div class="total-card"><div class="value">${totalJobs}</div><div class="label">Total Jobs</div></div>
         <div class="total-card teal"><div class="value">$${dumpsterRevenue.toFixed(2)}</div><div class="label">Dumpster Revenue</div></div>
         <div class="total-card teal"><div class="value">$${materialRevenue.toFixed(2)}</div><div class="label">Material Revenue</div></div>
         <div class="total-card"><div class="value">$${totalDumpFees.toFixed(2)}</div><div class="label">Total Dump Fees</div></div>
+        <div class="total-card teal"><div class="value">$${grossProfit.toFixed(2)}</div><div class="label">Gross Profit</div></div>
+        <div class="total-card"><div class="value">${dumpRatio.toFixed(1)}%</div><div class="label">Dump Cost % of Rev</div></div>
         <div class="total-card"><div class="value">${rentals}</div><div class="label">Rentals</div></div>
         <div class="total-card"><div class="value">${deliveries}</div><div class="label">Deliveries</div></div>
       `;

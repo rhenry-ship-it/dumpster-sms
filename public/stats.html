@@ -526,18 +526,28 @@ function normalizeHistoryRow(row) {
 
 function countInPeriod(jobs, periodStart) {
   const dropped = jobs.filter(j => j.type !== 'delivery' && j.dropoffCompleted && j.dropoffDate_computed && j.dropoffDate_computed >= periodStart).length;
-  const picked = jobs.filter(j => j.type !== 'delivery' && j.completed && j.actualPickupDate && new Date(j.actualPickupDate) >= periodStart).length;
-  return { dropped, picked };
+  const pickedJobs = jobs.filter(j => j.type !== 'delivery' && j.completed && j.actualPickupDate && new Date(j.actualPickupDate) >= periodStart);
+  const revenue = pickedJobs.reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
+  const dumpCost = pickedJobs.reduce((s, j) => s + (parseFloat(j.dumpCost) || 0), 0);
+  const grossProfit = revenue - dumpCost;
+  const dumpRatio = revenue > 0 ? (dumpCost / revenue) * 100 : 0;
+  return { dropped, picked: pickedJobs.length, revenue, dumpCost, grossProfit, dumpRatio };
 }
 
-function renderGrid(elId, stats) {
+function renderGrid(elId, stats, isAdmin) {
+  const financialCards = isAdmin ? `
+    <div class="total-card"><div class="value">$${stats.grossProfit.toFixed(2)}</div><div class="label">Gross Profit</div></div>
+    <div class="total-card"><div class="value">${stats.dumpRatio.toFixed(1)}%</div><div class="label">Dump Cost % of Rev</div></div>
+  ` : '';
   document.getElementById(elId).innerHTML = `
     <div class="total-card"><div class="value">${stats.dropped}</div><div class="label">Dropped Off</div></div>
     <div class="total-card teal"><div class="value">${stats.picked}</div><div class="label">Picked Up</div></div>
+    ${financialCards}
   `;
 }
 
-async function loadStats() {
+async function loadStats(role = getRole()) {
+  const isAdmin = role === 'admin';
   try {
     const res = await fetch('/api/jobs');
     const jobs = await res.json();
@@ -551,10 +561,10 @@ async function loadStats() {
         : (j.dropoffCompleted && j.createdAt ? new Date(j.createdAt) : null);
     });
 
-    renderGrid('weekGrid', countInPeriod(jobs, startOfWeek(now)));
-    renderGrid('monthGrid', countInPeriod(jobs, startOfMonth(now)));
-    renderGrid('quarterGrid', countInPeriod(jobs, startOfQuarter(now)));
-    renderGrid('yearGrid', countInPeriod(jobs, startOfYear(now)));
+    renderGrid('weekGrid', countInPeriod(jobs, startOfWeek(now)), isAdmin);
+    renderGrid('monthGrid', countInPeriod(jobs, startOfMonth(now)), isAdmin);
+    renderGrid('quarterGrid', countInPeriod(jobs, startOfQuarter(now)), isAdmin);
+    renderGrid('yearGrid', countInPeriod(jobs, startOfYear(now)), isAdmin);
   } catch (e) {
     document.getElementById('weekGrid').innerHTML = '<p style="color:#c62828">Could not load stats.</p>';
   }
@@ -565,7 +575,7 @@ requireAuth(function (role) {
     document.getElementById('historyImportSection').style.display = 'block';
     setupHistoryImport();
   }
-  loadStats();
+  loadStats(role);
 });
 </script>
 
