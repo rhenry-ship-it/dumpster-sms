@@ -375,9 +375,9 @@ app.get('/api/export.xlsx', async (req, res) => {
     });
   });
 
-  const dumpsterRevenue = jobs.filter(j => j.type !== 'delivery').reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
-  const materialRevenue = jobs.filter(j => j.type === 'delivery').reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
-  const totalDumpFees = jobs.reduce((s, j) => s + (parseFloat(j.dumpCost) || 0), 0);
+  const dumpsterRevenue = jobs.filter(j => j.type !== 'delivery').reduce((s, j) => s + parseMoney(j.price), 0);
+  const materialRevenue = jobs.filter(j => j.type === 'delivery').reduce((s, j) => s + parseMoney(j.price), 0);
+  const totalDumpFees = jobs.reduce((s, j) => s + parseMoney(j.dumpCost), 0);
 
   const summarySheet = workbook.addWorksheet('Summary');
   summarySheet.columns = [
@@ -395,6 +395,90 @@ app.get('/api/export.xlsx', async (req, res) => {
   await workbook.xlsx.write(res);
   res.end();
 });
+
+app.get('/api/export-financial.xlsx', async (req, res) => {
+  const jobs = loadJobs();
+  const settings = loadSettings();
+
+  const dumpsterRevenue = jobs.filter(j => j.type !== 'delivery').reduce((s, j) => s + parseMoney(j.price), 0);
+  const materialRevenue = jobs.filter(j => j.type === 'delivery').reduce((s, j) => s + parseMoney(j.price), 0);
+  const totalRevenue = dumpsterRevenue + materialRevenue;
+  const totalDumpFees = jobs.reduce((s, j) => s + parseMoney(j.dumpCost), 0);
+  const grossProfit = totalRevenue - totalDumpFees;
+  const dumpRatio = totalRevenue > 0 ? (totalDumpFees / totalRevenue) * 100 : 0;
+
+  const now = new Date();
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+  const yearEnd = new Date(now.getFullYear() + 1, 0, 1);
+  const monthsElapsed = ((now - yearStart) / (yearEnd - yearStart)) * 12;
+
+  const fuelYTD = parseMoney(settings.fuelCost) * monthsElapsed;
+  const payrollYTD = parseMoney(settings.payrollCost) * monthsElapsed;
+  const truckYTD = parseMoney(settings.truckCost) * monthsElapsed;
+  const totalExpensesYTD = fuelYTD + payrollYTD + truckYTD;
+  const netProfitYTD = grossProfit - totalExpensesYTD;
+
+  const workbook = new ExcelJS.Workbook();
+
+  const summary = workbook.addWorksheet('Financial Summary');
+  summary.columns = [
+    { header: 'Metric', key: 'metric', width: 34 },
+    { header: 'Value', key: 'value', width: 16 },
+  ];
+  summary.getRow(1).font = { bold: true };
+  summary.addRow({ metric: 'Total Jobs (all time)', value: jobs.length });
+  summary.addRow({ metric: 'Dumpster Revenue', value: dumpsterRevenue });
+  summary.addRow({ metric: 'Material Delivery Revenue', value: materialRevenue });
+  summary.addRow({ metric: 'Total Revenue', value: totalRevenue });
+  summary.addRow({ metric: 'Total Dump Fees Paid', value: totalDumpFees });
+  summary.addRow({ metric: 'Gross Profit', value: grossProfit });
+  summary.addRow({ metric: 'Dump Cost % of Revenue', value: `${dumpRatio.toFixed(1)}%` });
+  summary.addRow({});
+  summary.addRow({ metric: `YTD Fuel (ballpark, ${settings.fuelCost || 0}/mo)`, value: fuelYTD });
+  summary.addRow({ metric: `YTD Payroll (ballpark, ${settings.payrollCost || 0}/mo)`, value: payrollYTD });
+  summary.addRow({ metric: `YTD Truck/Maintenance/Insurance (ballpark, ${settings.truckCost || 0}/mo)`, value: truckYTD });
+  summary.addRow({ metric: 'YTD Total Operating Expenses (ballpark)', value: totalExpensesYTD });
+  summary.addRow({ metric: 'YTD Net Profit (ballpark)', value: netProfitYTD });
+
+  const monthly = workbook.addWorksheet('Monthly Breakdown');
+  monthly.columns = [
+    { header: 'Month', key: 'month', width: 14 },
+    { header: 'Rentals Picked Up', key: 'count', width: 18 },
+    { header: 'Revenue', key: 'revenue', width: 14 },
+    { header: 'Dump Cost', key: 'dumpCost', width: 14 },
+    { header: 'Gross Profit', key: 'grossProfit', width: 14 },
+  ];
+  monthly.getRow(1).font = { bold: true };
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  for (let m = 0; m < 12; m++) {
+    const mStart = new Date(now.getFullYear(), m, 1);
+    const mEnd = new Date(now.getFullYear(), m + 1, 1);
+    const monthJobs = jobs.filter(j =>
+      j.type !== 'delivery' && j.completed && j.actualPickupDate &&
+      new Date(j.actualPickupDate) >= mStart && new Date(j.actualPickupDate) < mEnd
+    );
+    const rev = monthJobs.reduce((s, j) => s + parseMoney(j.price), 0);
+    const dc = monthJobs.reduce((s, j) => s + parseMoney(j.dumpCost), 0);
+    monthly.addRow({
+      month: `${monthNames[m]} ${now.getFullYear()}`,
+      count: monthJobs.length,
+      revenue: rev,
+      dumpCost: dc,
+      grossProfit: rev - dc,
+    });
+  }
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="financial-report-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+  await workbook.xlsx.write(res);
+  res.end();
+});
+
+function parseMoney(val) {
+  if (val === null || val === undefined || val === '') return 0;
+  const n = parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
 
 function safeIsoDateTime(val) {
   const d = new Date(val);
@@ -422,42 +506,40 @@ app.post('/api/import-assets', (req, res) => {
       const isCompleted = isHistory && !!a.pickedUp;
       let existing = null;
 
-      if (isHistory) {
-        // Historical rows: a dumpster ID gets reused over time, so match a specific
-        // instance by dumpster + drop-off date together, not just the ID alone.
-        if (a.dumpsterId && a.dropoffActualDate) {
-          existing = jobs.find(j =>
-            j.type === 'rental' &&
-            j.dumpsterId &&
-            j.dumpsterId.toLowerCase() === a.dumpsterId.toLowerCase() &&
-            j.dropoffActualDate === a.dropoffActualDate
-          );
-        }
-        if (!existing) {
-          existing = jobs.find(j =>
-            j.type === 'rental' &&
-            j.address.toLowerCase() === a.address.toLowerCase() &&
-            j.dropoffActualDate === a.dropoffActualDate &&
-            (a.customer ? (j.customer || '').toLowerCase() === a.customer.toLowerCase() : true)
-          );
-        }
-      } else {
-        if (a.dumpsterId) {
-          existing = jobs.find(j =>
-            j.type === 'rental' &&
-            j.dumpsterId &&
-            j.dumpsterId.toLowerCase() === a.dumpsterId.toLowerCase() &&
-            !j.completed
-          );
-        }
-        if (!existing) {
-          existing = jobs.find(j =>
-            j.type === 'rental' &&
-            !j.completed &&
-            j.address.toLowerCase() === a.address.toLowerCase() &&
-            (a.customer ? (j.customer || '').toLowerCase() === a.customer.toLowerCase() : true)
-          );
-        }
+      // Unified matching regardless of which page the upload came from — a dumpster ID
+      // gets reused over time, so match a specific instance by ID + drop-off date together.
+      if (a.dumpsterId && a.dropoffActualDate) {
+        existing = jobs.find(j =>
+          j.type === 'rental' &&
+          j.dumpsterId &&
+          j.dumpsterId.toLowerCase() === a.dumpsterId.toLowerCase() &&
+          j.dropoffActualDate === a.dropoffActualDate
+        );
+      }
+      if (!existing && a.address && a.dropoffActualDate) {
+        existing = jobs.find(j =>
+          j.type === 'rental' &&
+          j.address.toLowerCase() === a.address.toLowerCase() &&
+          j.dropoffActualDate === a.dropoffActualDate &&
+          (a.customer ? (j.customer || '').toLowerCase() === a.customer.toLowerCase() : true)
+        );
+      }
+      // Fallback for rows with no drop-off date on file: match the current open job for that unit.
+      if (!existing && a.dumpsterId) {
+        existing = jobs.find(j =>
+          j.type === 'rental' &&
+          j.dumpsterId &&
+          j.dumpsterId.toLowerCase() === a.dumpsterId.toLowerCase() &&
+          !j.completed
+        );
+      }
+      if (!existing && !a.dumpsterId) {
+        existing = jobs.find(j =>
+          j.type === 'rental' &&
+          !j.completed &&
+          j.address.toLowerCase() === a.address.toLowerCase() &&
+          (a.customer ? (j.customer || '').toLowerCase() === a.customer.toLowerCase() : true)
+        );
       }
 
       if (existing) {
