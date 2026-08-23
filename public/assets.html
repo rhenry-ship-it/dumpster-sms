@@ -373,6 +373,16 @@
   .aging-row.warn .aging-days { background: #e0a83d; }
   .aging-row.alert .aging-days { background: var(--err); }
   .aging-meta { font-size: 13px; color: #55636c; margin-top: 6px; line-height: 1.5; }
+  .asset-item { margin-bottom: 10px; }
+  .asset-item .aging-row { margin-bottom: 0; width: 100%; text-align: left; cursor: pointer; font-family: inherit; }
+  .asset-item .aging-row.open { border-radius: 10px 10px 0 0; background: #f4fafc; }
+  .asset-edit-wrap {
+    background: #f4fafc;
+    border: 1px solid var(--line);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    padding: 14px 16px;
+  }
 </style>
 </head>
 <body>
@@ -432,7 +442,8 @@ function daysBetween(dateStr) {
   return Math.max(0, Math.round((now - start) / (1000 * 60 * 60 * 24)));
 }
 
-async function loadAssets() {
+async function loadAssets(role = getRole()) {
+  const isAdmin = role === 'admin';
   const listEl = document.getElementById('assetList');
   const gridEl = document.getElementById('summaryGrid');
   try {
@@ -461,24 +472,105 @@ async function loadAssets() {
       return;
     }
 
-    listEl.innerHTML = onSite.map(j => {
-      const cls = j.days >= 30 ? 'alert' : (j.days >= 14 ? 'warn' : '');
-      return `
-        <div class="aging-row ${cls}">
-          <div class="aging-top">
-            <div class="aging-id">${j.dumpsterId ? '#' + escapeHtml(j.dumpsterId) : 'No ID logged'}</div>
-            <div class="aging-days">${j.days} day${j.days === 1 ? '' : 's'}</div>
-          </div>
-          <div class="aging-meta">
-            ${escapeHtml(j.customer)} · ${escapeHtml(j.address)}<br/>
-            ${j.size ? escapeHtml(j.size) + ' · ' : ''}Dropped off: ${j.dropoffActualDate || j.dropDate || '—'}
-          </div>
-        </div>
-      `;
-    }).join('');
+    listEl.innerHTML = onSite.map(j => renderAssetRow(j, isAdmin)).join('');
+
+    if (isAdmin) {
+      document.querySelectorAll('.aging-row[data-target]').forEach(rowBtn => {
+        rowBtn.addEventListener('click', () => {
+          const wrap = document.getElementById(rowBtn.dataset.target);
+          if (!wrap) return;
+          const isOpen = wrap.style.display === 'block';
+          wrap.style.display = isOpen ? 'none' : 'block';
+          rowBtn.classList.toggle('open', !isOpen);
+        });
+      });
+
+      document.querySelectorAll('.asset-edit-form').forEach(form => {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const id = form.dataset.id;
+          const fd = new FormData(form);
+          const body = Object.fromEntries(fd.entries());
+          const btn = form.querySelector('button[type="submit"]');
+          btn.disabled = true;
+          btn.textContent = 'Saving…';
+          try {
+            await fetch(`/api/jobs/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            loadAssets();
+          } catch (err) {
+            alert('Could not save changes.');
+            btn.disabled = false;
+            btn.textContent = 'Save Changes';
+          }
+        });
+      });
+    }
   } catch (e) {
     listEl.innerHTML = '<p style="color:#c62828">Could not load assets.</p>';
   }
+}
+
+function renderAssetRow(j, isAdmin) {
+  const cls = j.days >= 30 ? 'alert' : (j.days >= 14 ? 'warn' : '');
+  const rowInner = `
+    <div class="aging-top">
+      <div class="aging-id">${j.dumpsterId ? '#' + escapeHtml(j.dumpsterId) : 'No ID logged'}</div>
+      <div class="aging-days">${j.days} day${j.days === 1 ? '' : 's'}</div>
+    </div>
+    <div class="aging-meta">
+      ${escapeHtml(j.customer)} · ${escapeHtml(j.address)}<br/>
+      ${j.size ? escapeHtml(j.size) + ' · ' : ''}Dropped off: ${j.dropoffActualDate || j.dropDate || '—'}
+    </div>
+  `;
+
+  if (!isAdmin) {
+    return `<div class="aging-row ${cls}">${rowInner}</div>`;
+  }
+
+  return `
+    <div class="asset-item">
+      <button type="button" class="aging-row ${cls}" data-target="asset-edit-${j.id}">${rowInner}</button>
+      <div class="asset-edit-wrap" id="asset-edit-${j.id}" style="display:none;">
+        <form class="asset-edit-form" data-id="${j.id}">
+          <div class="row">
+            <div>
+              <label>Customer</label>
+              <input name="customer" value="${escapeHtml(j.customer)}" />
+            </div>
+            <div>
+              <label>Dumpster ID</label>
+              <input name="dumpsterId" value="${escapeHtml(j.dumpsterId || '')}" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>Address</label>
+              <input name="address" value="${escapeHtml(j.address)}" />
+            </div>
+            <div>
+              <label>Size</label>
+              <input name="size" value="${escapeHtml(j.size || '')}" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>Drop-off Date</label>
+              <input type="date" name="dropoffActualDate" value="${j.dropoffActualDate || ''}" />
+            </div>
+            <div>
+              <label>Price ($)</label>
+              <input type="number" step="0.01" name="price" value="${escapeHtml(j.price || '')}" />
+            </div>
+          </div>
+          <button type="submit" class="submit-btn">Save Changes</button>
+        </form>
+      </div>
+    </div>
+  `;
 }
 
 requireAuth(function (role) {
@@ -597,6 +689,7 @@ function normalizeRow(row) {
 
   let price = String(get(['price', 'rate', 'amount']) || '').trim();
   if (!price && size.includes('15')) price = '425';
+  if (!price && size.includes('10')) price = '375';
 
   return {
     dumpsterId,
