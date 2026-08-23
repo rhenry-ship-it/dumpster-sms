@@ -246,6 +246,9 @@ app.patch('/api/jobs/:id', (req, res) => {
   if (req.body.pickupWeight !== undefined) {
     job.pickupWeight = req.body.pickupWeight;
   }
+  if (req.body.pickupDate !== undefined) {
+    job.pickupDate = req.body.pickupDate;
+  }
   if (req.body.dumpCost !== undefined) {
     job.dumpCost = req.body.dumpCost;
   }
@@ -381,6 +384,7 @@ app.post('/api/import-assets', (req, res) => {
       existing.address = a.address;
       existing.size = a.size || existing.size;
       existing.dumpsterId = a.dumpsterId || existing.dumpsterId;
+      if (a.price) existing.price = a.price;
       if (a.dropoffActualDate) {
         existing.dropoffActualDate = a.dropoffActualDate;
         existing.dropDate = a.dropoffActualDate;
@@ -398,7 +402,7 @@ app.post('/api/import-assets', (req, res) => {
         yards: null,
         dropDate: a.dropoffActualDate || '',
         pickupDate: '',
-        price: '',
+        price: a.price || '',
         notes: 'Imported from spreadsheet',
         tripLabel: '',
         dumpsterId: a.dumpsterId || '',
