@@ -411,16 +411,7 @@
   </form>
 </div>
 
-<div class="section-label">This Week</div>
-<div class="totals-grid" id="weekGrid"></div>
-
-<div class="section-label">This Month</div>
-<div class="totals-grid" id="monthGrid"></div>
-
-<div class="section-label">This Quarter</div>
-<div class="totals-grid" id="quarterGrid"></div>
-
-<div class="section-label">This Year</div>
+<div class="section-label">Year to Date</div>
 <div class="totals-grid" id="yearGrid"></div>
 
 <div id="historyImportSection" style="display:none;">
@@ -449,6 +440,13 @@ function startOfWeek(d) {
 function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
 function startOfQuarter(d) { const q = Math.floor(d.getMonth() / 3); return new Date(d.getFullYear(), q * 3, 1); }
 function startOfYear(d) { return new Date(d.getFullYear(), 0, 1); }
+
+function yearToDateMultiplier(now) {
+  const start = startOfYear(now);
+  const end = new Date(now.getFullYear() + 1, 0, 1);
+  const fraction = (now - start) / (end - start);
+  return fraction * 12; // scales a monthly ballpark figure to however much of the year has elapsed
+}
 
 function setupHistoryImport() {
   const fileInput = document.getElementById('historyImportFile');
@@ -591,8 +589,8 @@ function renderGrid(elId, stats, isAdmin) {
   const financialCards = isAdmin ? `
     <div class="total-card"><div class="value">$${stats.grossProfit.toFixed(2)}</div><div class="label">Gross Profit</div></div>
     <div class="total-card"><div class="value">${stats.dumpRatio.toFixed(1)}%</div><div class="label">Dump Cost % of Rev</div></div>
-    <div class="total-card"><div class="value">$${stats.periodExpenses.toFixed(2)}</div><div class="label">Ballpark Expenses</div></div>
-    <div class="total-card teal"><div class="value">$${stats.netProfit.toFixed(2)}</div><div class="label">Net Profit</div></div>
+    <div class="total-card"><div class="value">$${stats.periodExpenses.toFixed(2)}</div><div class="label">YTD Ballpark Expenses</div></div>
+    <div class="total-card teal"><div class="value">$${stats.netProfit.toFixed(2)}</div><div class="label">YTD Net Profit</div></div>
   ` : '';
   document.getElementById(elId).innerHTML = `
     <div class="total-card"><div class="value">${stats.dropped}</div><div class="label">Dropped Off</div></div>
@@ -620,13 +618,10 @@ async function loadStats(role = getRole()) {
         : (j.dropoffCompleted && j.createdAt ? new Date(j.createdAt) : null);
     });
 
-    // Multipliers are relative to the monthly ballpark figure entered.
-    renderGrid('weekGrid', countInPeriod(jobs, startOfWeek(now), 12 / 52, expenses), isAdmin);
-    renderGrid('monthGrid', countInPeriod(jobs, startOfMonth(now), 1, expenses), isAdmin);
-    renderGrid('quarterGrid', countInPeriod(jobs, startOfQuarter(now), 3, expenses), isAdmin);
-    renderGrid('yearGrid', countInPeriod(jobs, startOfYear(now), 12, expenses), isAdmin);
+    // Expenses are scaled to how much of the year has actually elapsed, not a full 12 months.
+    renderGrid('yearGrid', countInPeriod(jobs, startOfYear(now), yearToDateMultiplier(now), expenses), isAdmin);
   } catch (e) {
-    document.getElementById('weekGrid').innerHTML = '<p style="color:#c62828">Could not load stats.</p>';
+    document.getElementById('yearGrid').innerHTML = '<p style="color:#c62828">Could not load stats.</p>';
   }
 }
 
