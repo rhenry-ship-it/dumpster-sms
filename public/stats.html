@@ -488,10 +488,12 @@ function inferSizeFromId(id) {
 
 function toIsoDate(val) {
   if (!val) return '';
-  if (val instanceof Date && !isNaN(val.getTime())) return val.toISOString().slice(0, 10);
-  const parsed = new Date(val);
-  if (!isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
-  return String(val).trim();
+  let d = val instanceof Date ? val : new Date(val);
+  if (isNaN(d.getTime())) return String(val).trim();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function normalizeHistoryRow(row) {
@@ -503,11 +505,18 @@ function normalizeHistoryRow(row) {
     return '';
   };
 
+  function cleanMoney(val) {
+    if (val === null || val === undefined || val === '') return '';
+    const cleaned = String(val).replace(/[^0-9.-]/g, '');
+    const n = parseFloat(cleaned);
+    return isNaN(n) ? '' : String(n);
+  }
+
   const dumpsterId = String(get(['dumpster id', 'dumpster', 'can#', 'can', 'asset id', 'unit id', 'id']) || '').trim();
   let size = String(get(['size', 'yard', 'yd']) || '').trim();
   if (!size) size = inferSizeFromId(dumpsterId);
 
-  let price = String(get(['price', 'rate', 'amount']) || '').trim();
+  let price = cleanMoney(get(['price', 'rate', 'amount']));
   if (!price && size.includes('15')) price = '425';
   if (!price && size.includes('10')) price = '375';
 
@@ -517,8 +526,8 @@ function normalizeHistoryRow(row) {
     address: String(get(['address', 'location', 'site']) || '').trim(),
     size,
     price,
-    weight: String(get(['weight', 'tons', 'tonnage']) || '').trim(),
-    dumpCost: String(get(['trash cost', 'dump cost', 'tip fee', 'tipping fee', 'disposal cost', 'dump fee', 'tipping']) || '').trim(),
+    weight: cleanMoney(get(['weight', 'tons', 'tonnage'])),
+    dumpCost: cleanMoney(get(['trash cost', 'dump cost', 'tip fee', 'tipping fee', 'disposal cost', 'dump fee', 'tipping'])),
     dropoffActualDate: toIsoDate(get(['drop off date', 'dropoff date', 'dropped off', 'drop off', 'date dropped', 'date', 'start date'])),
     pickedUp: toIsoDate(get(['picked up', 'pickup date', 'date picked up', 'pickup'])),
   };
@@ -527,8 +536,13 @@ function normalizeHistoryRow(row) {
 function countInPeriod(jobs, periodStart) {
   const dropped = jobs.filter(j => j.type !== 'delivery' && j.dropoffCompleted && j.dropoffDate_computed && j.dropoffDate_computed >= periodStart).length;
   const pickedJobs = jobs.filter(j => j.type !== 'delivery' && j.completed && j.actualPickupDate && new Date(j.actualPickupDate) >= periodStart);
-  const revenue = pickedJobs.reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
-  const dumpCost = pickedJobs.reduce((s, j) => s + (parseFloat(j.dumpCost) || 0), 0);
+  function parseMoney(val) {
+    if (val === null || val === undefined || val === '') return 0;
+    const n = parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+    return isNaN(n) ? 0 : n;
+  }
+  const revenue = pickedJobs.reduce((s, j) => s + parseMoney(j.price), 0);
+  const dumpCost = pickedJobs.reduce((s, j) => s + parseMoney(j.dumpCost), 0);
   const grossProfit = revenue - dumpCost;
   const dumpRatio = revenue > 0 ? (dumpCost / revenue) * 100 : 0;
   return { dropped, picked: pickedJobs.length, revenue, dumpCost, grossProfit, dumpRatio };

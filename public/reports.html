@@ -429,9 +429,14 @@ async function loadAll(role = getRole()) {
         <div class="total-card"><div class="value">${deliveries}</div><div class="label">Deliveries</div></div>
       `;
     } else {
-      const dumpsterRevenue = jobs.filter(j => j.type !== 'delivery').reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
-      const materialRevenue = jobs.filter(j => j.type === 'delivery').reduce((s, j) => s + (parseFloat(j.price) || 0), 0);
-      const totalDumpFees = jobs.reduce((s, j) => s + (parseFloat(j.dumpCost) || 0), 0);
+      function parseMoney(val) {
+        if (val === null || val === undefined || val === '') return 0;
+        const n = parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+        return isNaN(n) ? 0 : n;
+      }
+      const dumpsterRevenue = jobs.filter(j => j.type !== 'delivery').reduce((s, j) => s + parseMoney(j.price), 0);
+      const materialRevenue = jobs.filter(j => j.type === 'delivery').reduce((s, j) => s + parseMoney(j.price), 0);
+      const totalDumpFees = jobs.reduce((s, j) => s + parseMoney(j.dumpCost), 0);
       const totalRevenue = dumpsterRevenue + materialRevenue;
       const grossProfit = totalRevenue - totalDumpFees;
       const dumpRatio = totalRevenue > 0 ? (totalDumpFees / totalRevenue) * 100 : 0;
