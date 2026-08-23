@@ -455,7 +455,7 @@ function setupHistoryImport() {
       });
       const result = await res.json();
       statusEl.style.color = 'var(--ok)';
-      statusEl.textContent = `✅ ${result.created} new, ${result.updated} updated.`;
+      statusEl.textContent = `✅ ${result.created} new, ${result.updated} updated${result.skipped ? `, ${result.skipped} skipped (bad data)` : ''}.`;
       loadStats();
     } catch (err) {
       statusEl.style.color = 'var(--err)';
