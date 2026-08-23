@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Asset Tracker</title>
+<link rel="apple-touch-icon" href="logo.jpeg" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Job Log" />
+<meta name="theme-color" content="#0d2b45" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0d2b45;
+    --navy-light: #163d5e;
+    --teal: #2ba9cf;
+    --teal-dark: #1c8bab;
+    --gray: #9aa5ab;
+    --ink: #14202b;
+    --paper: #f4f7f9;
+    --line: #d9e2e8;
+    --ok: #2e9e5b;
+    --err: #d64545;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    padding: 0 0 32px;
+    -webkit-font-smoothing: antialiased;
+  }
+  #topActionBar {
+    position: sticky;
+    top: 0;
+    z-index: 500;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    background: var(--navy);
+    padding: 8px 14px;
+  }
+  .top-action {
+    background: rgba(255,255,255,0.14);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  .top-action:active { background: rgba(255,255,255,0.3); }
+  .header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+    padding: 24px 20px 28px;
+    text-align: center;
+    border-bottom: 4px solid var(--teal);
+  }
+  .header img {
+    height: 68px;
+    width: auto;
+    display: block;
+    margin: 0 auto 10px;
+    border-radius: 12px;
+  }
+  .header p.sub {
+    color: #cfe4ee;
+    margin: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+  }
+  .content { padding: 20px; max-width: 640px; margin: 0 auto; }
+  h1 { display: none; }
+  form {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 10px rgba(13,43,69,0.06);
+  }
+  .row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 140px; }
+  label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 4px; color: var(--navy); }
+  input, select, textarea {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1.5px solid var(--line);
+    border-radius: 7px;
+    font-size: 15px;
+    font-family: inherit;
+    background: #fbfdfe;
+  }
+  input:focus, textarea:focus {
+    outline: none;
+    border-color: var(--teal);
+  }
+  textarea { resize: vertical; min-height: 50px; }
+  .address-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    background: white;
+    border: 1.5px solid var(--teal);
+    border-top: none;
+    border-radius: 0 0 7px 7px;
+    max-height: 220px;
+    overflow-y: auto;
+    display: none;
+  }
+  .address-suggestions div {
+    padding: 9px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--line);
+  }
+  .address-suggestions div:last-child { border-bottom: none; }
+  .address-suggestions div:active,
+  .address-suggestions div:hover {
+    background: #eaf6fa;
+  }
+  .trip-notice {
+    background: #fff4e5;
+    border: 1.5px solid #e0a83d;
+    color: #7a5310;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .nav-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+    background: #e9eef1;
+    padding: 4px;
+    border-radius: 12px;
+  }
+  .nav-tabs a {
+    flex: 1;
+    text-align: center;
+    padding: 9px 6px;
+    border-radius: 9px;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 700;
+    border: none;
+    color: var(--navy);
+    background: transparent;
+    transition: background 0.15s, color 0.15s;
+  }
+  .nav-tabs a.active {
+    background: var(--navy);
+    color: white;
+    box-shadow: 0 2px 6px rgba(13,43,69,0.25);
+  }
+  .totals-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .total-card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 14px;
+    text-align: center;
+    box-shadow: 0 3px 12px rgba(13,43,69,0.07);
+  }
+  .total-card .value {
+    font-size: 25px;
+    font-weight: 800;
+    color: var(--navy);
+    letter-spacing: -0.3px;
+  }
+  .total-card .label {
+    font-size: 11.5px;
+    color: #667680;
+    font-weight: 600;
+    margin-top: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .total-card.teal .value { color: var(--teal-dark); }
+  #searchBarWrap { margin-bottom: 16px; }
+  #globalSearch {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1.5px solid var(--line);
+    border-radius: 11px;
+    font-size: 15px;
+    font-family: inherit;
+    background: white;
+  }
+  #globalSearch:focus {
+    outline: none;
+    border-color: var(--teal);
+  }
+  .type-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
+  .type-toggle button {
+    flex: 1;
+    padding: 11px;
+    border: 1.5px solid var(--navy);
+    background: white;
+    color: var(--navy);
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+  }
+  .type-toggle button.active {
+    background: var(--navy);
+    color: white;
+    border-color: var(--navy);
+  }
+  .submit-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--teal);
+    color: white;
+    border: none;
+    border-radius: 11px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 4px;
+    letter-spacing: 0.2px;
+    font-family: inherit;
+    box-shadow: 0 3px 10px rgba(43,169,207,0.35);
+    transition: transform 0.1s, background 0.15s;
+  }
+  .submit-btn:active { background: var(--teal-dark); transform: scale(0.98); }
+  .submit-btn:disabled { opacity: 0.6; box-shadow: none; }
+  #status { margin-top: 10px; font-size: 14px; font-weight: 600; }
+  #status.ok { color: var(--ok); }
+  #status.err { color: var(--err); }
+  .job {
+    background: white;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--teal);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 10px rgba(13,43,69,0.06);
+  }
+  .job-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .job-title { font-weight: 700; color: var(--navy); }
+  .job-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 20px;
+    background: var(--navy);
+    color: white;
+  }
+  .job-meta { font-size: 13px; color: #55636c; margin-top: 4px; line-height: 1.5; }
+  .job-sent { font-size: 12px; margin-top: 6px; font-weight: 600; }
+  .job-sent.ok { color: var(--ok); }
+  .job-sent.err { color: var(--err); }
+  .job.completed { opacity: 0.65; border-left-color: var(--gray); }
+  .job-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .job-actions button {
+    flex: 1;
+    padding: 8px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1.5px solid var(--navy);
+    background: white;
+    color: var(--navy);
+  }
+  .job-actions button.complete-btn.done {
+    background: var(--ok);
+    border-color: var(--ok);
+    color: white;
+  }
+  .job-actions button.delete-btn {
+    border-color: var(--err);
+    color: var(--err);
+    flex: 0 0 auto;
+    padding: 8px 14px;
+  }
+  h2 { font-size: 16px; margin: 0 0 10px; color: var(--navy); }
+  .section-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #667680;
+    margin: 18px 0 8px;
+  }
+  #authOverlay {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .auth-box {
+    background: white;
+    border-radius: 14px;
+    padding: 28px 24px;
+    text-align: center;
+    max-width: 320px;
+    width: 100%;
+  }
+  .auth-box img { height: 56px; margin-bottom: 14px; }
+  .auth-box p { font-weight: 700; color: var(--navy); margin: 0 0 12px; }
+  .auth-box input {
+    width: 100%;
+    padding: 12px;
+    font-size: 20px;
+    text-align: center;
+    letter-spacing: 4px;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .auth-box button {
+    width: 100%;
+    padding: 12px;
+    background: var(--teal);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  #authError { color: var(--err); font-size: 13px; font-weight: 600; margin-top: 10px; }
+</style>
+<style>
+  .aging-row {
+    background: white;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--teal);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .aging-row.warn { border-left-color: #e0a83d; }
+  .aging-row.alert { border-left-color: var(--err); }
+  .aging-top { display: flex; justify-content: space-between; align-items: center; }
+  .aging-id { font-weight: 800; color: var(--navy); font-size: 16px; }
+  .aging-days {
+    font-size: 13px;
+    font-weight: 800;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: var(--teal);
+    color: white;
+  }
+  .aging-row.warn .aging-days { background: #e0a83d; }
+  .aging-row.alert .aging-days { background: var(--err); }
+  .aging-meta { font-size: 13px; color: #55636c; margin-top: 6px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <img src="logo.jpeg" alt="Oak & Pallet Disposal Corporation" />
+  <p class="sub">ASSET TRACKER — dumpsters currently on site</p>
+</div>
+<div class="content">
+
+<div class="nav-tabs">
+  <a href="index.html">New Job</a>
+  <a href="driver.html">Driver</a>
+  <a href="reports.html">All Jobs &amp; Totals</a>
+  <a href="archive.html">Archive</a>
+</div>
+<div class="nav-tabs">
+  <a href="stats.html">Statistics</a>
+  <a href="assets.html" class="active">Asset Tracker</a>
+</div>
+
+<div class="totals-grid" id="summaryGrid">
+  <div class="total-card"><div class="value">—</div><div class="label">Dumpsters Out</div></div>
+  <div class="total-card teal"><div class="value">—</div><div class="label">Avg Days On Site</div></div>
+</div>
+
+<div id="importSection" style="display:none;">
+  <div class="section-label">Import Existing Assets</div>
+  <form id="importForm">
+    <label>Upload your current tracking spreadsheet (.xlsx)</label>
+    <input type="file" id="importFile" accept=".xlsx,.xls" />
+    <p style="font-size:12px; color:#667680; margin-top:8px;">
+      Looks for columns named something like: Dumpster ID, Customer, Address, Size, Drop-off Date.
+      Column names don't need to match exactly — just contain those words.
+      Re-uploading updates existing entries (matched by Dumpster ID) instead of duplicating them.
+    </p>
+    <div id="importStatus" style="margin-top:8px; font-size:13px; font-weight:600;"></div>
+  </form>
+  <button id="clearImportsBtn" type="button" style="width:100%; margin-top:10px; padding:10px; border-radius:10px; border:1.5px solid var(--err); background:white; color:var(--err); font-weight:700; font-family:inherit; cursor:pointer;">Clear All Imported Assets</button>
+</div>
+
+<h2>Currently On Site (oldest first)</h2>
+<div id="assetList">Loading…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="auth.js"></script>
+<script>
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function daysBetween(dateStr) {
+  const start = new Date(dateStr);
+  start.setHours(0, 0, 0, 0);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((now - start) / (1000 * 60 * 60 * 24)));
+}
+
+async function loadAssets() {
+  const listEl = document.getElementById('assetList');
+  const gridEl = document.getElementById('summaryGrid');
+  try {
+    const res = await fetch('/api/jobs');
+    const jobs = await res.json();
+
+    const onSite = jobs
+      .filter(j => j.type !== 'delivery' && j.dropoffCompleted && !j.completed)
+      .map(j => ({
+        ...j,
+        days: daysBetween(j.dropoffActualDate || j.dropDate || j.createdAt),
+      }))
+      .sort((a, b) => b.days - a.days);
+
+    const avgDays = onSite.length
+      ? Math.round(onSite.reduce((s, j) => s + j.days, 0) / onSite.length)
+      : 0;
+
+    gridEl.innerHTML = `
+      <div class="total-card"><div class="value">${onSite.length}</div><div class="label">Dumpsters Out</div></div>
+      <div class="total-card teal"><div class="value">${avgDays}</div><div class="label">Avg Days On Site</div></div>
+    `;
+
+    if (onSite.length === 0) {
+      listEl.innerHTML = '<p style="color:#999">No dumpsters currently on site.</p>';
+      return;
+    }
+
+    listEl.innerHTML = onSite.map(j => {
+      const cls = j.days >= 30 ? 'alert' : (j.days >= 14 ? 'warn' : '');
+      return `
+        <div class="aging-row ${cls}">
+          <div class="aging-top">
+            <div class="aging-id">${j.dumpsterId ? '#' + escapeHtml(j.dumpsterId) : 'No ID logged'}</div>
+            <div class="aging-days">${j.days} day${j.days === 1 ? '' : 's'}</div>
+          </div>
+          <div class="aging-meta">
+            ${escapeHtml(j.customer)} · ${escapeHtml(j.address)}<br/>
+            ${j.size ? escapeHtml(j.size) + ' · ' : ''}Dropped off: ${j.dropoffActualDate || j.dropDate || '—'}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    listEl.innerHTML = '<p style="color:#c62828">Could not load assets.</p>';
+  }
+}
+
+requireAuth(function (role) {
+  if (role === 'admin') {
+    document.getElementById('importSection').style.display = 'block';
+    setupImport();
+  }
+  loadAssets();
+});
+
+function setupImport() {
+  const fileInput = document.getElementById('importFile');
+  const statusEl = document.getElementById('importStatus');
+  const clearBtn = document.getElementById('clearImportsBtn');
+
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    statusEl.style.color = 'var(--ink)';
+    statusEl.textContent = 'Reading file…';
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      let headerRowIndex = raw.findIndex(r =>
+        r.filter(c => c !== '' && c !== null && c !== undefined).length >= 2
+      );
+      if (headerRowIndex === -1) headerRowIndex = 0;
+      const headers = raw[headerRowIndex].map(h => String(h || '').trim());
+      const rows = raw.slice(headerRowIndex + 1)
+        .filter(r => r.some(c => c !== '' && c !== null && c !== undefined))
+        .map(r => {
+          const obj = {};
+          headers.forEach((h, i) => { obj[h || `col${i}`] = r[i]; });
+          return obj;
+        });
+
+      const parsed = rows.map(normalizeRow);
+      const skippedPickedUp = parsed.filter(a => a.address && a.dumpsterId && a.pickedUp).length;
+      const assets = parsed.filter(a => a.address && a.dumpsterId && !a.pickedUp);
+
+      if (assets.length === 0) {
+        statusEl.style.color = 'var(--err)';
+        statusEl.textContent = skippedPickedUp > 0
+          ? `All ${skippedPickedUp} matching row(s) already show a pickup date — nothing currently active to import.`
+          : 'No usable rows found — check for Dumpster ID and Address columns.';
+        fileInput.value = '';
+        return;
+      }
+
+      statusEl.textContent = `Importing ${assets.length} active asset(s)${skippedPickedUp > 0 ? ` (skipped ${skippedPickedUp} already picked up)` : ''}…`;
+      const res = await fetch('/api/import-assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assets }),
+      });
+      const result = await res.json();
+      statusEl.style.color = 'var(--ok)';
+      statusEl.textContent = `✅ ${result.created} new, ${result.updated} updated.`;
+      loadAssets();
+    } catch (err) {
+      statusEl.style.color = 'var(--err)';
+      statusEl.textContent = 'Could not read that file — make sure it is a valid .xlsx.';
+    }
+    fileInput.value = '';
+  });
+
+  clearBtn.addEventListener('click', async () => {
+    if (!confirm('Remove every asset that came from a spreadsheet import? Manually-created jobs are not affected.')) return;
+    try {
+      const res = await fetch('/api/import-assets', { method: 'DELETE' });
+      const result = await res.json();
+      statusEl.style.color = 'var(--ok)';
+      statusEl.textContent = `Removed ${result.removed} imported asset(s).`;
+      loadAssets();
+    } catch (e) {
+      statusEl.style.color = 'var(--err)';
+      statusEl.textContent = 'Could not clear imported assets.';
+    }
+  });
+}
+
+function normalizeRow(row) {
+  const get = (aliases) => {
+    for (const key of Object.keys(row)) {
+      const k = key.toLowerCase().trim();
+      if (aliases.some(a => k.includes(a))) return row[key];
+    }
+    return '';
+  };
+
+  function toIsoDate(val) {
+    if (!val) return '';
+    if (val instanceof Date && !isNaN(val.getTime())) {
+      return val.toISOString().slice(0, 10);
+    }
+    const parsed = new Date(val);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
+    return String(val).trim();
+  }
+
+  return {
+    dumpsterId: String(get(['dumpster id', 'dumpster', 'can#', 'can', 'asset id', 'unit id', 'id']) || '').trim(),
+    customer: String(get(['customer', 'client', 'name']) || '').trim(),
+    address: String(get(['address', 'location', 'site']) || '').trim(),
+    size: String(get(['size', 'yard', 'yd']) || '').trim(),
+    price: String(get(['price', 'rate', 'amount']) || '').trim(),
+    dropoffActualDate: toIsoDate(get(['drop off date', 'dropoff date', 'dropped off', 'drop off', 'date dropped', 'date', 'start date'])),
+    pickedUp: toIsoDate(get(['picked up', 'pickup date', 'date picked up', 'pickup'])),
+  };
+}
+</script>
+
+</div>
+</body>
+</html>
